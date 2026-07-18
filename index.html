@@ -51,7 +51,14 @@
           <span class="system-title">発注システム</span>
         </h1>
       </div>
-      <div class="customer-box customer-profile"><img id="profileImage" class="profile-image hidden" alt=""><div><span>発注元</span><strong id="customerName">―</strong><small id="memberName"></small></div></div>
+      <div class="customer-box customer-profile">
+        <img id="profileImage" class="profile-image hidden" alt="LINEプロフィール画像">
+        <div class="customer-details">
+          <span class="customer-label">発注元</span>
+          <strong id="customerName">―</strong>
+          <small id="memberName"></small>
+        </div>
+      </div>
     </header>
 
     <nav class="tab-bar three-tabs">
@@ -89,7 +96,7 @@
             <h2>2. 商品</h2>
             <button id="addItemButton" type="button" class="button button-secondary button-compact">＋ 商品を追加</button>
           </div>
-          <p class="small-note">この得意先に登録された商品を表示しています。</p>
+          <p class="small-note">この得意先に登録された商品を表示しています。単価は時価のため画面には表示しません。</p>
           <div id="itemsContainer"></div>
           <button id="saveAsFavoriteButton" type="button" class="button button-secondary button-large">現在の商品をお気に入りセットに保存</button>
         </section>

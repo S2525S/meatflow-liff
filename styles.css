@@ -138,3 +138,39 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
 @media(max-width:420px){
   .favorite-manage-actions{grid-template-columns:1fr 1fr}
 }
+
+
+/* v0.7.1 スマートフォン操作性改善 */
+.page{padding-bottom:105px}
+.three-tabs .tab-button{font-size:.9rem;white-space:nowrap}
+.section-heading{align-items:center}
+.section-heading .button-compact{min-height:36px;padding:5px 10px;font-size:.86rem}
+.item-card{padding:13px 14px;margin-bottom:11px}
+.item-heading{margin-bottom:4px}
+.item-heading .item-number{font-size:1rem}
+.item-card .field{gap:4px;margin-bottom:10px}
+.item-card .field>span{font-size:.88rem}
+.item-card input,.item-card select{min-height:46px;padding:9px 11px}
+.item-card .field-grid{gap:10px}
+.item-card .remove-item-button{font-size:.86rem}
+.draft-action-row{margin-top:4px;text-align:right}
+.draft-action-row .button{width:auto;min-height:40px;padding:7px 15px}
+.fixed-order-actions{
+  position:fixed;right:0;bottom:0;left:0;z-index:12;
+  display:grid;grid-template-columns:.7fr 1.3fr;gap:10px;
+  width:min(100%,760px);margin:auto;
+  padding:10px 14px max(10px,env(safe-area-inset-bottom));
+  background:rgba(244,241,234,.97);border-top:1px solid var(--border);
+  box-shadow:0 -8px 24px rgba(0,0,0,.08);backdrop-filter:blur(8px)
+}
+.fixed-order-actions .button{min-height:52px;padding:9px 12px;font-weight:900}
+#confirmView .sticky-actions{z-index:13}
+@media(max-width:480px){
+  .card{padding:17px 14px}
+  .three-tabs .tab-button{min-height:48px;font-size:.88rem}
+  .item-card .field-grid{grid-template-columns:1fr .8fr}
+}
+@media(max-width:360px){
+  .three-tabs .tab-button{font-size:.8rem}
+  .fixed-order-actions{grid-template-columns:.65fr 1.35fr;gap:8px;padding-inline:10px}
+}

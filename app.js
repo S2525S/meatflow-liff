@@ -252,6 +252,9 @@ function normalizeAiParsedOrder(parsed) {
     items: items.map(x => ({
       productCode: String(x.productCode || ''),
       productName: String(x.productName || ''),
+      originalProductName: String(x.originalProductName || x.productName || ''),
+      matchStatus: String(x.matchStatus || ''),
+      candidates: Array.isArray(x.candidates) ? x.candidates : [],
       quantity: Number(x.quantity || 0),
       unit: String(x.unit || ''),
       note: String(x.note || '')
@@ -387,18 +390,128 @@ function addItem(data = null) {
 
   byId('itemsContainer').appendChild(fragment);
   if (data) {
-    const exists = [...select.options].some(x => x.value === data.productCode);
-    select.value = exists ? (data.productCode || '') : 'OTHER';
-    if (select.value === 'OTHER') {
-      otherField.classList.remove('hidden');
-      otherInput.required = true;
+    const match = resolveProductMatch(data);
+    if (match.product) {
+      select.value = match.product.productCode;
+      select.dispatchEvent(new Event('change'));
+      card.dataset.aiMatchStatus = match.status;
+      card.dataset.aiOriginalName = data.productName || '';
+      showAiProductMatchNotice(card, match);
+    } else {
+      select.value = 'OTHER';
+      select.dispatchEvent(new Event('change'));
       otherInput.value = data.productName || '';
+      card.dataset.aiMatchStatus = 'unmatched';
+      card.dataset.aiOriginalName = data.productName || '';
+      showAiProductMatchNotice(card, match);
     }
     unit.value = data.unit || select.options[select.selectedIndex]?.dataset.defaultUnit || '';
     card.querySelector('.quantity-input').value = data.quantity ?? '';
     card.querySelector('.item-note-input').value = data.note || '';
   }
   renumber();
+}
+
+
+function normalizeProductText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[　\s\-ー・･()（）【】\[\]「」『』]/g, '')
+    .replace(/牛肉|豚肉|鶏肉/g, '');
+}
+
+function productSimilarity(a, b) {
+  const x = normalizeProductText(a);
+  const y = normalizeProductText(b);
+  if (!x || !y) return 0;
+  if (x === y) return 1;
+  if (x.includes(y) || y.includes(x)) {
+    return 0.82 + 0.15 * Math.min(x.length, y.length) / Math.max(x.length, y.length);
+  }
+  const bigrams = s => {
+    const set = new Set();
+    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+    if (s.length === 1) set.add(s);
+    return set;
+  };
+  const bx = bigrams(x);
+  const by = bigrams(y);
+  let common = 0;
+  bx.forEach(v => { if (by.has(v)) common++; });
+  return (2 * common) / Math.max(1, bx.size + by.size);
+}
+
+function resolveProductMatch(data) {
+  const code = String(data?.productCode || '');
+  const name = String(data?.productName || '').trim();
+
+  if (code) {
+    const byCode = state.products.find(p => String(p.productCode) === code);
+    if (byCode) return { product: byCode, status: 'exact', score: 1, candidates: [byCode] };
+  }
+
+  const ranked = state.products.map(product => {
+    const names = [product.productName, product.displayName].filter(Boolean);
+    const score = Math.max(...names.map(n => productSimilarity(name, n)), 0);
+    return { product, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const best = ranked[0];
+  const second = ranked[1];
+  if (!best || best.score < 0.58) {
+    return { product: null, status: 'unmatched', score: best?.score || 0, candidates: ranked.slice(0, 3).filter(x => x.score >= 0.3).map(x => x.product) };
+  }
+
+  const ambiguous = second && second.score >= 0.58 && (best.score - second.score) < 0.12;
+  if (ambiguous) {
+    return { product: null, status: 'ambiguous', score: best.score, candidates: ranked.slice(0, 3).map(x => x.product) };
+  }
+
+  return {
+    product: best.product,
+    status: best.score >= 0.92 ? 'exact' : 'fuzzy',
+    score: best.score,
+    candidates: ranked.slice(0, 3).map(x => x.product)
+  };
+}
+
+function showAiProductMatchNotice(card, match) {
+  const old = card.querySelector('.ai-product-match');
+  if (old) old.remove();
+
+  if (!match || match.status === 'exact') return;
+
+  const notice = document.createElement('div');
+  notice.className = `ai-product-match ai-match-${match.status}`;
+
+  if (match.status === 'fuzzy' && match.product) {
+    notice.innerHTML =
+      `<strong>AI商品照合：</strong>「${escapeHtml(card.dataset.aiOriginalName)}」を
+       「${escapeHtml(match.product.displayName || match.product.productName)}」として選択しました。
+       必ず確認してください。`;
+  } else {
+    const candidates = (match.candidates || []).map(p =>
+      `<button type="button" class="ai-candidate-button" data-code="${escapeHtml(p.productCode)}">${escapeHtml(p.displayName || p.productName)}</button>`
+    ).join('');
+    notice.innerHTML =
+      `<strong>${match.status === 'ambiguous' ? '候補が複数あります。' : '商品マスターと一致しませんでした。'}</strong>
+       <span>元の表記：${escapeHtml(card.dataset.aiOriginalName || '不明')}</span>
+       ${candidates ? `<div class="ai-candidate-list">${candidates}</div>` : ''}`;
+
+    notice.querySelectorAll('.ai-candidate-button').forEach(button => {
+      button.onclick = () => {
+        const select = card.querySelector('.product-select');
+        select.value = button.dataset.code;
+        select.dispatchEvent(new Event('change'));
+        card.dataset.aiMatchStatus = 'confirmed';
+        notice.remove();
+      };
+    });
+  }
+
+  const select = card.querySelector('.product-select');
+  select.closest('.item-card').querySelector('.item-heading').after(notice);
 }
 
 function updateDateMode() {
@@ -419,6 +532,9 @@ function collectOrder() {
 
   const items = [...document.querySelectorAll('.item-card')].map((card, i) => {
     const select = card.querySelector('.product-select');
+    if (card.dataset.aiMatchStatus === 'ambiguous' || card.dataset.aiMatchStatus === 'unmatched') {
+      throw new Error(`${i + 1}件目の商品を商品マスターから選択してください。`);
+    }
     const quantity = Number(card.querySelector('.quantity-input').value);
     const unit = card.querySelector('.unit-input').value.trim();
     if (!select.value) throw new Error(`${i + 1}件目の商品を選択してください。`);

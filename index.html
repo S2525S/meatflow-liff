@@ -44,7 +44,13 @@
 
   <section id="mainView" class="hidden">
     <header class="app-header">
-      <div><p class="eyebrow">🐂 MeatFlow</p><h1 id="screenTitle">株式会社髙那（担たん亭）への発注</h1></div>
+      <div class="brand-heading">
+        <p class="eyebrow">🐂 MeatFlow</p>
+        <h1 id="screenTitle">
+          <span class="company-title">株式会社髙那（担たん亭）</span>
+          <span class="system-title">発注システム</span>
+        </h1>
+      </div>
       <div class="customer-box customer-profile"><img id="profileImage" class="profile-image hidden" alt=""><div><span>発注元</span><strong id="customerName">―</strong><small id="memberName"></small></div></div>
     </header>
 
@@ -81,7 +87,7 @@
         <section class="card">
           <div class="section-heading">
             <h2>2. 商品</h2>
-            <button id="addItemButton" type="button" class="button button-secondary">＋ 商品を追加</button>
+            <button id="addItemButton" type="button" class="button button-secondary button-compact">＋ 商品を追加</button>
           </div>
           <p class="small-note">この得意先に登録された商品を表示しています。</p>
           <div id="itemsContainer"></div>

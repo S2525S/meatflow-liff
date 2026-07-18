@@ -38,3 +38,23 @@ padding:12px 14px max(12px,env(safe-area-inset-bottom));background:rgba(244,243,
 .success-mark{display:grid;width:70px;height:70px;margin:0 auto 16px;place-items:center;border-radius:50%;background:var(--success);color:#fff;font-size:2rem;font-weight:900}
 .order-id{display:block;margin:8px 0 20px;font-size:1.25rem}.muted{color:var(--muted)}
 @media(max-width:480px){.app-header{display:block}.customer-box{margin-top:10px;text-align:left}.field-grid{grid-template-columns:1fr .8fr}.two-buttons{flex-direction:column-reverse}}
+/* iPhoneで入力欄が横にはみ出すのを防止 */
+.field,
+.field-grid,
+.field-grid > * {
+  min-width: 0;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+
+input[type="date"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  -webkit-appearance: none;
+}

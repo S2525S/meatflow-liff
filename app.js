@@ -13,7 +13,9 @@ const state = {
   historyHasMore: false,
   historyLoading: false,
   historyRequestId: 0,
-  renderedOrderIds: new Set()
+  renderedOrderIds: new Set(),
+  aiParsedOrder: null,
+  aiFaxData: null
 };
 let jsonpCounter = 0;
 let submitTimer = null;
@@ -29,6 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('submitButton').onclick = submitOrder;
   byId('closeButton').onclick = () => liff.isInClient() ? liff.closeWindow() : location.reload();
   byId('newOrderTab').onclick = () => switchTab('new');
+  byId('aiOrderTab').onclick = () => switchTab('ai');
   byId('favoriteTab').onclick = () => switchTab('favorite');
   byId('historyTab').onclick = () => switchTab('history');
   byId('historySearchButton').onclick = () => loadHistory(true);
@@ -37,6 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('saveDraftButton').onclick = saveDraft;
   byId('deleteDraftButton').onclick = deleteDraft;
   byId('saveAsFavoriteButton').onclick = saveCurrentItemsAsFavorite;
+  byId('aiTextModeButton').onclick = () => setAiMode('text');
+  byId('aiFaxModeButton').onclick = () => setAiMode('fax');
+  byId('aiFaxFile').onchange = handleFaxFile;
+  byId('analyzeAiOrderButton').onclick = analyzeAiOrder;
+  byId('applyAiResultButton').onclick = applyAiResultToOrder;
   document.querySelectorAll('input[name="dateMode"]').forEach(x => x.onchange = updateDateMode);
   window.addEventListener('message', receiveSubmitResult);
   initializeApp();
@@ -123,19 +131,193 @@ async function registerMember(e) {
 
 function switchTab(tab) {
   const isNew = tab === 'new';
+  const isAi = tab === 'ai';
   const isFavorite = tab === 'favorite';
   const isHistory = tab === 'history';
   byId('newOrderPanel').classList.toggle('hidden', !isNew);
+  byId('aiOrderPanel').classList.toggle('hidden', !isAi);
   byId('favoritePanel').classList.toggle('hidden', !isFavorite);
   byId('historyPanel').classList.toggle('hidden', !isHistory);
   byId('newOrderTab').classList.toggle('active', isNew);
+  byId('aiOrderTab').classList.toggle('active', isAi);
   byId('favoriteTab').classList.toggle('active', isFavorite);
   byId('historyTab').classList.toggle('active', isHistory);
   byId('screenTitle').innerHTML = isNew
     ? '<span class="company-title">株式会社髙那（担たん亭）</span><span class="system-title">発注システム</span>'
-    : isFavorite ? '<span class="single-title">お気に入りセット</span>'
-      : '<span class="single-title">注文履歴から発注</span>';
+    : isAi ? '<span class="single-title">AI受注</span>'
+      : isFavorite ? '<span class="single-title">お気に入りセット</span>'
+        : '<span class="single-title">注文履歴から発注</span>';
   if (isHistory && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
+}
+
+
+function setAiMode(mode) {
+  const isText = mode === 'text';
+  byId('aiTextMode').classList.toggle('hidden', !isText);
+  byId('aiFaxMode').classList.toggle('hidden', isText);
+  byId('aiTextModeButton').className = `button ${isText ? 'button-primary' : 'button-secondary'}`;
+  byId('aiFaxModeButton').className = `button ${isText ? 'button-secondary' : 'button-primary'}`;
+  byId('aiAnalyzeStatus').textContent = '';
+  state.aiParsedOrder = null;
+  byId('aiResultPanel').classList.add('hidden');
+}
+
+async function handleFaxFile(e) {
+  const file = e.target.files?.[0];
+  state.aiFaxData = null;
+  byId('aiFaxPreview').classList.add('hidden');
+  if (!file) return;
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    e.target.value = '';
+    return alert('JPEG・PNG・WebP画像を選択してください。');
+  }
+  try {
+    state.aiFaxData = await resizeImageForAi(file, 1600, 0.82);
+    byId('aiFaxPreview').src = `data:${state.aiFaxData.mimeType};base64,${state.aiFaxData.base64}`;
+    byId('aiFaxPreview').classList.remove('hidden');
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
+
+function resizeImageForAi(file, maxSide, quality) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('画像を読み込めませんでした。'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('画像形式を読み込めませんでした。'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        resolve({ mimeType, base64: dataUrl.split(',')[1] });
+      };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function analyzeAiOrder() {
+  const isFax = !byId('aiFaxMode').classList.contains('hidden');
+  const text = byId('aiOrderText').value.trim();
+  if (!isFax && !text) return alert('注文内容を入力または貼り付けしてください。');
+  if (isFax && !state.aiFaxData) return alert('FAX画像を選択してください。');
+
+  const button = byId('analyzeAiOrderButton');
+  button.disabled = true;
+  button.textContent = '解析しています…';
+  byId('aiAnalyzeStatus').textContent = 'AIが注文内容を読み取っています。発注はまだ行われません。';
+  try {
+    let result;
+    try {
+      result = await postAction('parseAiOrder', {
+        inputType: isFax ? 'fax' : 'text',
+        text,
+        imageMimeType: isFax ? state.aiFaxData.mimeType : '',
+        imageBase64: isFax ? state.aiFaxData.base64 : ''
+      });
+      if (!result.ok) throw new Error(result.error || 'AI解析に失敗しました。');
+    } catch (err) {
+      if (isFax) throw err;
+      result = { ok: true, parsed: parseOrderTextLocally(text), fallback: true };
+    }
+    state.aiParsedOrder = normalizeAiParsedOrder(result.parsed || {});
+    renderAiResult(state.aiParsedOrder, Boolean(result.fallback));
+    byId('aiAnalyzeStatus').textContent = result.fallback
+      ? '簡易解析を行いました。商品名・数量・単位を必ず確認してください。'
+      : '解析が完了しました。内容を確認してください。';
+  } catch (err) {
+    byId('aiAnalyzeStatus').textContent = '';
+    alert(err.message || String(err));
+  } finally {
+    button.disabled = false;
+    button.textContent = 'AIで解析する';
+  }
+}
+
+function normalizeAiParsedOrder(parsed) {
+  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  return {
+    deliveryDate: String(parsed.deliveryDate || ''),
+    deliveryCondition: String(parsed.deliveryCondition || ''),
+    receiveMethod: String(parsed.receiveMethod || ''),
+    preferredTime: String(parsed.preferredTime || ''),
+    orderNote: String(parsed.orderNote || ''),
+    items: items.map(x => ({
+      productCode: String(x.productCode || ''),
+      productName: String(x.productName || ''),
+      quantity: Number(x.quantity || 0),
+      unit: String(x.unit || ''),
+      note: String(x.note || '')
+    })).filter(x => x.productName || x.productCode),
+    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : []
+  };
+}
+
+function renderAiResult(parsed, fallback) {
+  const warnings = [...parsed.warnings];
+  if (!parsed.items.length) warnings.push('商品を読み取れませんでした。');
+  parsed.items.forEach((x, i) => {
+    if (!x.quantity) warnings.push(`商品${i + 1}の数量を確認してください。`);
+    if (!x.unit) warnings.push(`商品${i + 1}の単位を確認してください。`);
+  });
+  if (fallback) warnings.unshift('AI APIを利用できなかったため、端末内の簡易解析結果です。');
+
+  byId('aiWarnings').classList.toggle('hidden', !warnings.length);
+  byId('aiWarnings').innerHTML = warnings.length
+    ? `<strong>確認が必要です</strong><ul>${warnings.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`
+    : '';
+
+  const items = parsed.items.length
+    ? `<ul class="ai-result-items">${parsed.items.map(x => `<li><strong>${escapeHtml(x.productName || '商品名不明')}</strong>　${escapeHtml(x.quantity || '数量不明')} ${escapeHtml(x.unit || '単位不明')}</li>`).join('')}</ul>`
+    : '<p>商品を読み取れませんでした。</p>';
+
+  byId('aiResultSummary').innerHTML =
+    `<dl class="ai-summary">${row('希望日', parsed.deliveryDate || parsed.deliveryCondition || '未判定')}${row('受取方法', parsed.receiveMethod || '未判定')}${row('時間帯', parsed.preferredTime || '未判定')}${row('備考', parsed.orderNote || 'なし')}</dl>${items}`;
+  byId('aiResultPanel').classList.remove('hidden');
+}
+
+function applyAiResultToOrder() {
+  if (!state.aiParsedOrder) return;
+  const p = state.aiParsedOrder;
+  applyOrderToForm({
+    deliveryDate: p.deliveryDate,
+    deliveryCondition: p.deliveryCondition,
+    receiveMethod: p.receiveMethod,
+    preferredTime: p.preferredTime,
+    orderNote: p.orderNote,
+    items: p.items
+  });
+  switchTab('new');
+  scrollTo(0, 0);
+  alert('解析結果を発注画面へ入力しました。商品・数量・単位・希望日を必ず確認し、必要な箇所を修正してください。');
+}
+
+function parseOrderTextLocally(text) {
+  const items = [];
+  const warnings = [];
+  const lines = String(text).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const itemPattern = /^(.+?)\s*[：:、,\s]\s*(\d+(?:\.\d+)?)\s*(kg|g|本|個|枚|パック|箱|ケース|袋)?(?:\s+(.*))?$/i;
+  for (const line of lines) {
+    const m = line.match(itemPattern);
+    if (m) items.push({ productName: m[1].trim(), quantity: Number(m[2]), unit: m[3] || '', note: m[4] || '' });
+  }
+  if (!items.length) warnings.push('「商品名 数量 単位」の形式で読み取れる商品がありませんでした。');
+  return {
+    deliveryDate: '',
+    deliveryCondition: /明日/.test(text) ? '明日' : (/最短/.test(text) ? '最短希望' : ''),
+    receiveMethod: /店舗|引取|受取/.test(text) ? '店舗受取（担たん亭でのお受け取り）' : (/配送/.test(text) ? '配送希望' : ''),
+    preferredTime: (text.match(/午前中|12時[〜～-]14時|14時[〜～-]16時|16時[〜～-]18時|18時以降/) || [''])[0],
+    orderNote: '',
+    items,
+    warnings
+  };
 }
 
 function renderReceiveMethods() {
@@ -555,6 +737,8 @@ function copyHistoryToForm(order, editable) {
 }
 
 function submitOrder() {
+  if (!state.pendingOrder) return;
+  if (!confirm('表示されている内容で発注を確定します。商品・数量・単位・希望日を確認しましたか？')) return;
   const button = byId('submitButton');
   button.disabled = true;
   button.textContent = '送信しています…';

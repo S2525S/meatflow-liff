@@ -44,13 +44,14 @@
 
   <section id="mainView" class="hidden">
     <header class="app-header">
-      <div><p class="eyebrow">🐂 MeatFlow</p><h1 id="screenTitle">新規発注</h1></div>
-      <div class="customer-box"><span>発注元</span><strong id="customerName">―</strong><small id="memberName"></small></div>
+      <div><p class="eyebrow">🐂 MeatFlow</p><h1 id="screenTitle">株式会社髙那（担たん亭）への発注</h1></div>
+      <div class="customer-box customer-profile"><img id="profileImage" class="profile-image hidden" alt=""><div><span>発注元</span><strong id="customerName">―</strong><small id="memberName"></small></div></div>
     </header>
 
-    <nav class="tab-bar">
-      <button id="newOrderTab" class="tab-button active" type="button">新規発注</button>
-      <button id="historyTab" class="tab-button" type="button">注文履歴</button>
+    <nav class="tab-bar three-tabs">
+      <button id="newOrderTab" class="tab-button active" type="button">発注</button>
+      <button id="favoriteTab" class="tab-button" type="button">お気に入りセット</button>
+      <button id="historyTab" class="tab-button" type="button">注文履歴から発注</button>
     </nav>
 
     <section id="newOrderPanel">
@@ -84,6 +85,7 @@
           </div>
           <p class="small-note">この得意先に登録された商品を表示しています。</p>
           <div id="itemsContainer"></div>
+          <button id="saveAsFavoriteButton" type="button" class="button button-secondary button-large">現在の商品をお気に入りセットに保存</button>
         </section>
 
         <section class="card">
@@ -114,9 +116,18 @@
       </form>
     </section>
 
+
+    <section id="favoritePanel" class="hidden">
+      <section class="card">
+        <h2>お気に入りセット</h2>
+        <p class="small-note">得意先内の有効なスタッフ全員で共有されます。最大5件まで登録できます。</p>
+      </section>
+      <div id="favoriteList"></div>
+    </section>
+
     <section id="historyPanel" class="hidden">
       <section class="card">
-        <h2>注文履歴</h2>
+        <h2>注文履歴から発注</h2>
         <div class="history-filters">
           <input id="historyKeyword" type="search" placeholder="商品名・注文番号・担当者名で検索">
           <button id="historySearchButton" class="button button-secondary" type="button">検索</button>

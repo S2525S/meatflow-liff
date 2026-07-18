@@ -96,3 +96,34 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   .company-title{font-size:1rem}
   .three-tabs .tab-button{font-size:.72rem}
 }
+
+/* v0.6.2 操作性調整 */
+.app-header{align-items:flex-start}
+.customer-box.customer-profile{
+  min-width:230px;
+  padding:12px 14px;
+  border:1px solid #d6cebf;
+  background:linear-gradient(145deg,#eee8dc,#e6ddcd);
+  box-shadow:0 5px 16px rgba(0,0,0,.05)
+}
+.customer-details{min-width:0}
+.customer-label{font-weight:800;letter-spacing:.04em}
+.customer-box strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:.98rem
+}
+.customer-box small{margin-top:2px}
+.profile-image{width:46px;height:46px;flex-basis:46px;border:2px solid rgba(255,255,255,.9)}
+.section-heading h2{margin-bottom:0}
+.section-heading{margin-bottom:12px}
+.button-compact{white-space:nowrap}
+.sticky-actions{box-shadow:0 -8px 24px rgba(0,0,0,.06)}
+@media(max-width:480px){
+  .app-header{display:block}
+  .customer-box.customer-profile{width:100%;min-width:0;margin-top:12px}
+  .company-title{font-size:1.08rem}
+  .system-title{font-size:.82rem}
+  .three-tabs .tab-button{min-height:52px}
+}

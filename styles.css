@@ -69,3 +69,17 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   .app-header{display:block}.customer-box{margin-top:10px}.field-grid{grid-template-columns:1fr .8fr}
   .two-buttons{flex-direction:column-reverse}.history-actions{grid-template-columns:1fr}
 }
+
+.three-tabs{grid-template-columns:repeat(3,1fr)}
+.three-tabs .tab-button{font-size:.86rem;padding:7px}
+.customer-profile{display:flex;align-items:center;gap:10px}
+.profile-image{width:42px;height:42px;flex:0 0 42px;border-radius:50%;object-fit:cover;background:#fff}
+.favorite-card{margin-bottom:14px;padding:17px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.favorite-card h3{margin:0 0 4px}
+.favorite-meta{margin-bottom:10px;color:var(--muted);font-size:.82rem}
+.favorite-items{margin:10px 0;padding-left:20px}
+.favorite-actions{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+@media(max-width:480px){
+  .three-tabs{grid-template-columns:1fr}
+  .favorite-actions{grid-template-columns:1fr}
+}

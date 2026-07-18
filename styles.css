@@ -80,6 +80,19 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
 .favorite-items{margin:10px 0;padding-left:20px}
 .favorite-actions{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
 @media(max-width:480px){
-  .three-tabs{grid-template-columns:1fr}
   .favorite-actions{grid-template-columns:1fr}
+}
+
+.brand-heading{min-width:0}
+#screenTitle{margin:0;line-height:1.25}
+#screenTitle span{display:block}
+.company-title{font-size:1.12rem;white-space:nowrap}
+.system-title{margin-top:3px;font-size:.88rem;color:var(--muted);font-weight:800;letter-spacing:.08em}
+.single-title{font-size:1.35rem}
+.three-tabs{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.three-tabs .tab-button{min-width:0;min-height:48px;padding:6px 4px;font-size:.78rem;line-height:1.25;word-break:keep-all}
+.button-compact{width:auto;min-height:40px;padding:7px 12px;font-size:.9rem}
+@media(max-width:380px){
+  .company-title{font-size:1rem}
+  .three-tabs .tab-button{font-size:.72rem}
 }

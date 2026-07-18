@@ -127,3 +127,14 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   .system-title{font-size:.82rem}
   .three-tabs .tab-button{min-height:52px}
 }
+
+/* v0.7 お気に入りセット管理 */
+.favorite-primary-actions{grid-template-columns:1fr 1fr;margin-top:12px}
+.favorite-manage-actions{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:8px}
+.favorite-manage-actions .button{min-height:38px;padding:6px 5px;font-size:.78rem}
+.button-danger{background:#fff;border:1px solid #b54848;color:#a33232}
+.button-danger:hover{background:#fff3f3}
+.button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:420px){
+  .favorite-manage-actions{grid-template-columns:1fr 1fr}
+}

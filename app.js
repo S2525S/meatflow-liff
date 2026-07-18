@@ -354,13 +354,21 @@ function renderFavorites() {
     card.innerHTML = `<h3>${escapeHtml(favorite.setName)}</h3>
       <div class="favorite-meta">更新：${escapeHtml(favorite.updatedByName || favorite.createdByName || '')} ${escapeHtml(favorite.updatedAt || favorite.createdAt || '')}</div>
       <ul class="favorite-items">${(favorite.items || []).map(x => `<li>${escapeHtml(x.productName)}　${escapeHtml(x.quantity)} ${escapeHtml(x.unit)}</li>`).join('')}</ul>
-      <div class="favorite-actions">
+      <div class="favorite-actions favorite-primary-actions">
         <button class="button button-primary apply" type="button">発注に反映</button>
         <button class="button button-secondary overwrite" type="button">現在の商品で上書き</button>
-        <button class="button button-secondary delete" type="button">削除</button>
+      </div>
+      <div class="favorite-actions favorite-manage-actions">
+        <button class="button button-secondary rename" type="button">名前変更</button>
+        <button class="button button-secondary move-up" type="button" ${state.favorites.indexOf(favorite) === 0 ? 'disabled' : ''}>↑ 上へ</button>
+        <button class="button button-secondary move-down" type="button" ${state.favorites.indexOf(favorite) === state.favorites.length - 1 ? 'disabled' : ''}>↓ 下へ</button>
+        <button class="button button-danger delete" type="button">削除</button>
       </div>`;
     card.querySelector('.apply').onclick = () => applyFavorite(favorite);
     card.querySelector('.overwrite').onclick = () => overwriteFavorite(favorite);
+    card.querySelector('.rename').onclick = () => renameFavorite(favorite);
+    card.querySelector('.move-up').onclick = () => moveFavorite(favorite, 'up');
+    card.querySelector('.move-down').onclick = () => moveFavorite(favorite, 'down');
     card.querySelector('.delete').onclick = () => removeFavorite(favorite);
     list.appendChild(card);
   });
@@ -386,6 +394,31 @@ async function overwriteFavorite(favorite) {
     state.favorites = state.favorites.map(x => x.favoriteId === favorite.favoriteId ? result.favorite : x);
     renderFavorites();
     alert('お気に入りセットを更新しました。');
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
+
+async function renameFavorite(favorite) {
+  const setName = prompt('新しいセット名を入力してください。（最大30文字）', favorite.setName);
+  if (setName === null || setName.trim() === favorite.setName) return;
+  try {
+    const result = await postAction('renameFavorite', { favoriteId: favorite.favoriteId, setName: setName.trim() });
+    if (!result.ok) throw new Error(result.error || 'セット名を変更できませんでした。');
+    state.favorites = state.favorites.map(x => x.favoriteId === favorite.favoriteId ? result.favorite : x);
+    renderFavorites();
+    alert('セット名を変更しました。');
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
+
+async function moveFavorite(favorite, direction) {
+  try {
+    const result = await postAction('moveFavorite', { favoriteId: favorite.favoriteId, direction });
+    if (!result.ok) throw new Error(result.error || '並び順を変更できませんでした。');
+    state.favorites = result.favorites || state.favorites;
+    renderFavorites();
   } catch (err) {
     alert(err.message || String(err));
   }

@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
@@ -10,37 +10,45 @@
   <script src="./config.js"></script>
 </head>
 <body>
-  <main class="page">
-    <section id="loadingView" class="center-card">
-      <div class="spinner"></div>
-      <h1>読み込み中</h1>
-      <p id="loadingMessage">LINEの情報を確認しています。</p>
-    </section>
+<main class="page">
+  <section id="loadingView" class="center-card">
+    <div class="spinner"></div><h1>読み込み中</h1>
+    <p id="loadingMessage">LINEの情報を確認しています。</p>
+  </section>
 
-    <section id="errorView" class="center-card hidden">
-      <h1>起動できませんでした</h1>
-      <p id="errorMessage" class="error-message"></p>
-      <button id="retryButton" type="button" class="button button-primary">もう一度試す</button>
-    </section>
+  <section id="errorView" class="center-card hidden">
+    <h1>起動できませんでした</h1>
+    <p id="errorMessage" class="error-message"></p>
+    <button id="retryButton" class="button button-primary">もう一度試す</button>
+  </section>
 
-    <section id="appView" class="hidden">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">MeatFlow</p>
-          <h1>新規発注</h1>
-        </div>
-        <div class="customer-box">
-          <span>発注元</span>
-          <strong id="customerName">―</strong>
-        </div>
-      </header>
+  <section id="mainView" class="hidden">
+    <header class="app-header">
+      <div><p class="eyebrow">MeatFlow</p><h1 id="screenTitle">新規発注</h1></div>
+      <div class="customer-box"><span>発注元</span><strong id="customerName">―</strong></div>
+    </header>
 
+    <nav class="tab-bar">
+      <button id="newOrderTab" class="tab-button active" type="button">新規発注</button>
+      <button id="historyTab" class="tab-button" type="button">注文履歴</button>
+    </nav>
+
+    <section id="newOrderPanel">
       <form id="orderForm" novalidate>
         <section class="card">
           <h2>1. ご希望日</h2>
-          <label class="field">
-            <span>希望日 <em>必須</em></span>
-            <input id="deliveryDate" type="date" required>
+          <div class="date-mode">
+            <label><input type="radio" name="dateMode" value="date" checked> 日付を指定</label>
+            <label><input type="radio" name="dateMode" value="text"> 条件を入力</label>
+            <label><input type="radio" name="dateMode" value="both"> 両方入力</label>
+          </div>
+          <label id="deliveryDateField" class="field">
+            <span>希望日</span>
+            <input id="deliveryDate" type="date">
+          </label>
+          <label id="deliveryConditionField" class="field hidden">
+            <span>希望条件</span>
+            <input id="deliveryCondition" type="text" placeholder="例：7月22日までに希望、最短希望">
           </label>
         </section>
 
@@ -49,29 +57,13 @@
             <h2>2. 商品</h2>
             <button id="addItemButton" type="button" class="button button-secondary">＋ 商品を追加</button>
           </div>
+          <p class="small-note">この得意先に登録された商品を表示しています。</p>
           <div id="itemsContainer"></div>
         </section>
 
         <section class="card">
           <h2>3. 受取方法</h2>
-          <div class="radio-list">
-            <label id="deliveryOption" class="radio-card">
-              <input type="radio" name="receiveMethod" value="配送希望">
-              <span>
-                <strong>配送希望</strong>
-                <small>※ 配送日時は、ご希望に添えない場合があります。</small>
-              </span>
-            </label>
-
-            <label id="pickupOption" class="radio-card">
-              <input type="radio" name="receiveMethod" value="店舗受取（担たん亭でのお受け取り）">
-              <span>
-                <strong>店舗受取</strong>
-                <small>担たん亭でのお受け取り</small>
-              </span>
-            </label>
-          </div>
-
+          <div id="receiveMethodArea" class="radio-list"></div>
           <label class="field">
             <span>希望時間帯</span>
             <select id="preferredTime">
@@ -91,65 +83,67 @@
         </section>
 
         <div class="sticky-actions">
-          <button type="submit" class="button button-primary button-large">注文内容を確認する</button>
+          <button class="button button-primary button-large" type="submit">注文内容を確認する</button>
         </div>
       </form>
     </section>
 
-    <section id="confirmView" class="hidden">
-      <header class="app-header">
-        <div>
-          <p class="eyebrow">MeatFlow</p>
-          <h1>注文内容の確認</h1>
+    <section id="historyPanel" class="hidden">
+      <section class="card">
+        <h2>注文履歴</h2>
+        <div class="history-filters">
+          <input id="historyKeyword" type="search" placeholder="商品名・注文番号で検索">
+          <button id="historySearchButton" class="button button-secondary" type="button">検索</button>
         </div>
-      </header>
-      <div id="confirmationContent"></div>
-      <div class="sticky-actions two-buttons">
-        <button id="editButton" type="button" class="button button-secondary button-large">内容を修正する</button>
-        <button id="submitButton" type="button" class="button button-primary button-large">この内容で発注する</button>
-      </div>
+        <p class="small-note">過去の注文をすべて確認できます。20件ずつ読み込みます。</p>
+      </section>
+      <div id="historyList"></div>
+      <button id="loadMoreHistoryButton" class="button button-secondary button-large hidden" type="button">さらに20件を表示</button>
     </section>
+  </section>
 
-    <section id="completeView" class="center-card hidden">
-      <div class="success-mark">✓</div>
-      <h1>発注を受け付けました</h1>
-      <p>注文番号</p>
-      <strong id="completedOrderId" class="order-id"></strong>
-      <p class="muted">担当者が内容を確認いたします。</p>
-      <button id="closeButton" type="button" class="button button-primary">閉じる</button>
-    </section>
-  </main>
+  <section id="confirmView" class="hidden">
+    <header class="app-header"><div><p class="eyebrow">MeatFlow</p><h1>注文内容の確認</h1></div></header>
+    <div id="confirmationContent"></div>
+    <div class="sticky-actions two-buttons">
+      <button id="editButton" class="button button-secondary button-large" type="button">内容を修正する</button>
+      <button id="submitButton" class="button button-primary button-large" type="button">この内容で発注する</button>
+    </div>
+  </section>
 
-  <template id="itemTemplate">
-    <article class="item-card">
-      <div class="item-heading">
-        <strong class="item-number">商品 1</strong>
-        <button type="button" class="remove-item-button">削除</button>
-      </div>
-      <label class="field">
-        <span>商品 <em>必須</em></span>
-        <select class="product-select" required>
-          <option value="">商品を選択してください</option>
-        </select>
-      </label>
-      <div class="field-grid">
-        <label class="field">
-          <span>数量 <em>必須</em></span>
-          <input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required>
-        </label>
-        <label class="field">
-          <span>単位 <em>必須</em></span>
-          <input class="unit-input" type="text" placeholder="kg" required>
-        </label>
-      </div>
-      <label class="field">
-        <span>商品備考</span>
-        <input class="item-note-input" type="text" placeholder="厚切り、スライスなど">
-      </label>
-    </article>
-  </template>
+  <section id="completeView" class="center-card hidden">
+    <div class="success-mark">✓</div><h1>発注を受け付けました</h1>
+    <p>注文番号</p><strong id="completedOrderId" class="order-id"></strong>
+    <button id="closeButton" class="button button-primary">閉じる</button>
+  </section>
+</main>
 
-  <iframe id="submitFrame" name="submitFrame" class="hidden" title="注文送信"></iframe>
-  <script src="./app.js"></script>
+<template id="itemTemplate">
+  <article class="item-card">
+    <div class="item-heading">
+      <strong class="item-number">商品 1</strong>
+      <button type="button" class="remove-item-button">削除</button>
+    </div>
+    <label class="field">
+      <span>商品 <em>必須</em></span>
+      <select class="product-select" required>
+        <option value="">商品を選択してください</option>
+      </select>
+    </label>
+    <label class="field other-name-field hidden">
+      <span>その他の商品名 <em>必須</em></span>
+      <input class="other-name-input" type="text" placeholder="例：厚切り牛タン">
+      <small>送信後、得意先別商品の「未確認」として登録されます。</small>
+    </label>
+    <div class="field-grid">
+      <label class="field"><span>数量 <em>必須</em></span><input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+      <label class="field"><span>単位 <em>必須</em></span><input class="unit-input" type="text" placeholder="kg" required></label>
+    </div>
+    <label class="field"><span>商品備考</span><input class="item-note-input" type="text" placeholder="厚切り、スライスなど"></label>
+  </article>
+</template>
+
+<iframe id="submitFrame" name="submitFrame" class="hidden"></iframe>
+<script src="./app.js"></script>
 </body>
 </html>

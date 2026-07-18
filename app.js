@@ -1,229 +1,190 @@
-﻿'use strict';
+'use strict';
+const CONFIG=window.MEATFLOW_CONFIG||{};
+const state={profile:null,idToken:'',customer:null,products:[],pendingOrder:null,historyPage:0,historyHasMore:false};
+let jsonpCounter=0,submitTimer=null;
 
-const CONFIG = window.MEATFLOW_CONFIG || {};
-const state = { profile:null, idToken:'', customer:null, products:[], pendingOrder:null };
-let jsonpCounter = 0;
-let submitTimer = null;
-
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('retryButton').addEventListener('click', initializeApp);
-  document.getElementById('addItemButton').addEventListener('click', addItem);
-  document.getElementById('orderForm').addEventListener('submit', showConfirmation);
-  document.getElementById('editButton').addEventListener('click', () => showView('appView'));
-  document.getElementById('submitButton').addEventListener('click', submitOrder);
-  document.getElementById('closeButton').addEventListener('click', closeWindow);
-  window.addEventListener('message', receiveSubmitResult);
+document.addEventListener('DOMContentLoaded',()=>{
+  byId('retryButton').onclick=initializeApp;
+  byId('addItemButton').onclick=()=>addItem();
+  byId('orderForm').onsubmit=showConfirmation;
+  byId('editButton').onclick=()=>showOnly('mainView');
+  byId('submitButton').onclick=submitOrder;
+  byId('closeButton').onclick=()=>{if(liff.isInClient())liff.closeWindow()};
+  byId('newOrderTab').onclick=()=>switchTab('new');
+  byId('historyTab').onclick=()=>switchTab('history');
+  byId('historySearchButton').onclick=()=>loadHistory(true);
+  byId('loadMoreHistoryButton').onclick=()=>loadHistory(false);
+  document.querySelectorAll('input[name="dateMode"]').forEach(x=>x.onchange=updateDateMode);
+  window.addEventListener('message',receiveSubmitResult);
   initializeApp();
 });
 
-async function initializeApp() {
-  showView('loadingView');
-  setLoading('LIFFを初期化しています。');
-  try {
+async function initializeApp(){
+  showOnly('loadingView');
+  try{
     validateConfig();
-    await withTimeout(liff.init({ liffId: CONFIG.LIFF_ID }), 15000, 'LIFFの初期化がタイムアウトしました。');
-
-    if (!liff.isLoggedIn()) {
-      liff.login({ redirectUri: location.href.split('#')[0] });
-      return;
-    }
-
-    setLoading('LINEプロフィールを確認しています。');
-    state.profile = await liff.getProfile();
-    state.idToken = liff.getIDToken();
-
-    if (!state.idToken) {
-      throw new Error('LINEのIDトークンを取得できません。LINE DevelopersのScopeで openid を有効にしてください。');
-    }
-
-    setLoading('取引先と商品を読み込んでいます。');
-    const data = await jsonp('bootstrap', { idToken: state.idToken });
-
-    if (!data.ok) throw new Error(data.error || '初期データを取得できませんでした。');
-    state.customer = data.customer;
-    state.products = data.products || [];
-
-    if (!state.customer?.registered) throw new Error('このLINEアカウントは取引先登録されていません。');
-    if (!state.products.length) throw new Error('注文できる商品が登録されていません。');
-
-    document.getElementById('customerName').textContent = state.customer.customerName || '取引先';
-    document.getElementById('deliveryOption').classList.toggle('hidden', !state.customer.deliveryAllowed);
-    document.getElementById('pickupOption').classList.toggle('hidden', !state.customer.pickupAllowed);
+    await timeout(liff.init({liffId:CONFIG.LIFF_ID}),15000,'LIFF初期化がタイムアウトしました。');
+    if(!liff.isLoggedIn()){liff.login({redirectUri:location.href.split('#')[0]});return}
+    state.profile=await liff.getProfile(); state.idToken=liff.getIDToken();
+    if(!state.idToken)throw new Error('LINE IDトークンを取得できません。');
+    const data=await jsonp('bootstrap',{idToken:state.idToken});
+    if(!data.ok)throw new Error(data.error||'初期データを取得できません。');
+    state.customer=data.customer; state.products=data.products||[];
+    if(!state.customer?.registered)throw new Error('このLINEアカウントは取引先登録されていません。');
+    byId('customerName').textContent=state.customer.customerName||'取引先';
+    renderReceiveMethods();
     setMinimumDate();
-    document.getElementById('itemsContainer').innerHTML = '';
-    addItem();
-    showView('appView');
-  } catch (e) {
-    showError(e);
+    byId('itemsContainer').innerHTML=''; addItem();
+    showOnly('mainView'); switchTab('new');
+  }catch(e){byId('errorMessage').textContent=e.message||String(e);showOnly('errorView')}
+}
+
+function switchTab(tab){
+  const isNew=tab==='new';
+  byId('newOrderPanel').classList.toggle('hidden',!isNew);
+  byId('historyPanel').classList.toggle('hidden',isNew);
+  byId('newOrderTab').classList.toggle('active',isNew);
+  byId('historyTab').classList.toggle('active',!isNew);
+  byId('screenTitle').textContent=isNew?'新規発注':'注文履歴';
+  if(!isNew&&state.historyPage===0)loadHistory(true);
+}
+
+function renderReceiveMethods(){
+  const c=state.customer,area=byId('receiveMethodArea'); area.innerHTML='';
+  const options=[];
+  if(c.deliveryAllowed)options.push(['配送希望','配送希望','※ 配送日時は、ご希望に添えない場合があります。']);
+  if(c.pickupAllowed)options.push(['店舗受取（担たん亭でのお受け取り）','店舗受取','担たん亭でのお受け取り']);
+  options.forEach(([v,title,small])=>{
+    const label=document.createElement('label'); label.className='radio-card';
+    label.innerHTML=`<input type="radio" name="receiveMethod" value="${escapeHtml(v)}"><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(small)}</small></span>`;
+    area.appendChild(label);
+  });
+  if(c.receiveMode==='固定'&&c.defaultReceiveMethod){
+    const target=[...area.querySelectorAll('input')].find(x=>x.value===c.defaultReceiveMethod);
+    if(target){target.checked=true;area.querySelectorAll('input').forEach(x=>x.disabled=true)}
+  }else if(c.defaultReceiveMethod){
+    const target=[...area.querySelectorAll('input')].find(x=>x.value===c.defaultReceiveMethod); if(target)target.checked=true;
   }
 }
 
-function validateConfig() {
-  if (!CONFIG.LIFF_ID || CONFIG.LIFF_ID.includes('ここに')) throw new Error('config.jsのLIFF_IDを設定してください。');
-  if (!CONFIG.GAS_WEB_APP_URL || CONFIG.GAS_WEB_APP_URL.includes('ここに') || !CONFIG.GAS_WEB_APP_URL.endsWith('/exec')) {
-    throw new Error('config.jsのGAS_WEB_APP_URLへ、Apps Scriptの /exec URLを設定してください。');
+function addItem(data=null){
+  const f=byId('itemTemplate').content.cloneNode(true),card=f.querySelector('.item-card');
+  const select=f.querySelector('.product-select'),unit=f.querySelector('.unit-input'),otherField=f.querySelector('.other-name-field'),otherInput=f.querySelector('.other-name-input');
+  state.products.forEach(p=>{
+    const o=document.createElement('option');o.value=p.productCode;o.textContent=p.displayName||p.productName;
+    o.dataset.productName=p.productName;o.dataset.displayName=p.displayName||p.productName;o.dataset.defaultUnit=p.defaultUnit||'kg';select.appendChild(o)
+  });
+  const other=document.createElement('option');other.value='OTHER';other.textContent='その他（商品名を入力）';select.appendChild(other);
+  select.onchange=()=>{
+    const isOther=select.value==='OTHER';otherField.classList.toggle('hidden',!isOther);
+    otherInput.required=isOther;
+    if(!isOther)unit.value=select.options[select.selectedIndex]?.dataset.defaultUnit||'';
+  };
+  f.querySelector('.remove-item-button').onclick=()=>{if(document.querySelectorAll('.item-card').length<=1)return alert('商品は1件以上必要です。');card.remove();renumber()};
+  byId('itemsContainer').appendChild(f);
+  if(data){
+    select.value=data.productCode||'';
+    if(data.productCode==='OTHER'){otherField.classList.remove('hidden');otherInput.required=true;otherInput.value=data.productName||''}
+    unit.value=data.unit||select.options[select.selectedIndex]?.dataset.defaultUnit||'';
+    card.querySelector('.quantity-input').value=data.quantity||'';
+    card.querySelector('.item-note-input').value=data.note||'';
   }
-}
-
-function jsonp(action, params={}) {
-  return new Promise((resolve, reject) => {
-    const callback = '__meatflowJsonp' + (++jsonpCounter);
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => cleanup(new Error('Apps Scriptとの通信がタイムアウトしました。')), 20000);
-
-    function cleanup(error, value) {
-      clearTimeout(timeout);
-      delete window[callback];
-      script.remove();
-      error ? reject(error) : resolve(value);
-    }
-
-    window[callback] = value => cleanup(null, value);
-    script.onerror = () => cleanup(new Error('Apps Script APIを読み込めませんでした。'));
-
-    const url = new URL(CONFIG.GAS_WEB_APP_URL);
-    url.searchParams.set('action', action);
-    url.searchParams.set('callback', callback);
-    Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
-    script.src = url.toString();
-    document.head.appendChild(script);
-  });
-}
-
-function addItem() {
-  const fragment = document.getElementById('itemTemplate').content.cloneNode(true);
-  const card = fragment.querySelector('.item-card');
-  const select = fragment.querySelector('.product-select');
-  const unit = fragment.querySelector('.unit-input');
-
-  state.products.forEach(p => {
-    const o = document.createElement('option');
-    o.value = p.productCode;
-    o.textContent = p.productName;
-    o.dataset.productName = p.productName;
-    o.dataset.defaultUnit = p.defaultUnit || 'kg';
-    select.appendChild(o);
-  });
-
-  select.addEventListener('change', () => {
-    unit.value = select.options[select.selectedIndex]?.dataset.defaultUnit || '';
-  });
-
-  fragment.querySelector('.remove-item-button').addEventListener('click', () => {
-    if (document.querySelectorAll('.item-card').length <= 1) return alert('商品は1件以上必要です。');
-    card.remove(); renumber();
-  });
-
-  document.getElementById('itemsContainer').appendChild(fragment);
   renumber();
 }
 
-function renumber() {
-  document.querySelectorAll('.item-card').forEach((card,i) => {
-    card.querySelector('.item-number').textContent = `商品 ${i+1}`;
+function updateDateMode(){
+  const mode=document.querySelector('input[name="dateMode"]:checked').value;
+  byId('deliveryDateField').classList.toggle('hidden',mode==='text');
+  byId('deliveryConditionField').classList.toggle('hidden',mode==='date');
+}
+function collectOrder(){
+  const mode=document.querySelector('input[name="dateMode"]:checked').value;
+  const date=byId('deliveryDate').value.trim(),condition=byId('deliveryCondition').value.trim();
+  if(mode==='date'&&!date)throw new Error('希望日を選択してください。');
+  if(mode==='text'&&!condition)throw new Error('希望条件を入力してください。');
+  if(mode==='both'&&(!date||!condition))throw new Error('希望日と希望条件を入力してください。');
+  const receive=document.querySelector('input[name="receiveMethod"]:checked')?.value||'';
+  if(!receive)throw new Error('受取方法を選択してください。');
+  const items=[...document.querySelectorAll('.item-card')].map((card,i)=>{
+    const s=card.querySelector('.product-select'),q=Number(card.querySelector('.quantity-input').value),u=card.querySelector('.unit-input').value.trim();
+    if(!s.value)throw new Error(`${i+1}件目の商品を選択してください。`);
+    const isOther=s.value==='OTHER';
+    const name=isOther?card.querySelector('.other-name-input').value.trim():(s.options[s.selectedIndex].dataset.productName||s.options[s.selectedIndex].textContent);
+    if(!name)throw new Error(`${i+1}件目の商品名を入力してください。`);
+    if(!Number.isFinite(q)||q<=0)throw new Error(`${i+1}件目の数量を正しく入力してください。`);
+    if(!u)throw new Error(`${i+1}件目の単位を入力してください。`);
+    return{productCode:s.value,productName:name,quantity:q,unit:u,note:card.querySelector('.item-note-input').value.trim(),isOther}
   });
+  return{deliveryDate:date,deliveryCondition:condition,dateMode:mode,receiveMethod:receive,preferredTime:byId('preferredTime').value,orderNote:byId('orderNote').value.trim(),items,reorderSourceId:state.pendingOrder?.reorderSourceId||''}
 }
 
-function collectOrder() {
-  const deliveryDate = document.getElementById('deliveryDate').value;
-  const receiveMethod = document.querySelector('input[name="receiveMethod"]:checked')?.value || '';
-  if (!deliveryDate) throw new Error('希望日を入力してください。');
-  if (!receiveMethod) throw new Error('受取方法を選択してください。');
+function showConfirmation(e){e.preventDefault();try{
+  state.pendingOrder=collectOrder();const o=state.pendingOrder;
+  const items=o.items.map((x,i)=>`<div class="summary-card"><h2>商品 ${i+1}</h2><dl>${row('商品',x.productName)}${row('数量',`${x.quantity} ${x.unit}`)}${row('備考',x.note||'なし')}</dl></div>`).join('');
+  byId('confirmationContent').innerHTML=`<div class="summary-card"><dl>${row('取引先',state.customer.customerName)}${row('希望日',o.deliveryDate||'指定なし')}${row('希望条件',o.deliveryCondition||'なし')}${row('受取方法',o.receiveMethod)}${row('時間帯',o.preferredTime||'指定なし')}${row('備考',o.orderNote||'なし')}</dl></div>${items}`;
+  showOnly('confirmView');scrollTo(0,0)
+}catch(err){alert(err.message)}}
 
-  const items = [...document.querySelectorAll('.item-card')].map((card,i) => {
-    const select = card.querySelector('.product-select');
-    const quantity = Number(card.querySelector('.quantity-input').value);
-    const unit = card.querySelector('.unit-input').value.trim();
-    if (!select.value) throw new Error(`${i+1}件目の商品を選択してください。`);
-    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`${i+1}件目の数量を正しく入力してください。`);
-    if (!unit) throw new Error(`${i+1}件目の単位を入力してください。`);
-    return {
-      productCode: select.value,
-      productName: select.options[select.selectedIndex].dataset.productName || select.options[select.selectedIndex].textContent,
-      quantity, unit,
-      note: card.querySelector('.item-note-input').value.trim()
-    };
-  });
-
-  return {
-    deliveryDate, receiveMethod,
-    preferredTime: document.getElementById('preferredTime').value,
-    orderNote: document.getElementById('orderNote').value.trim(),
-    items
-  };
+async function loadHistory(reset){
+  try{
+    if(reset){state.historyPage=0;byId('historyList').innerHTML=''}
+    const page=state.historyPage+1;
+    const data=await jsonp('history',{idToken:state.idToken,page:String(page),pageSize:'20',keyword:byId('historyKeyword').value.trim()});
+    if(!data.ok)throw new Error(data.error||'履歴を取得できません。');
+    data.orders.forEach(renderHistoryCard);
+    state.historyPage=page;state.historyHasMore=data.hasMore;
+    byId('loadMoreHistoryButton').classList.toggle('hidden',!data.hasMore);
+    if(reset&&!data.orders.length)byId('historyList').innerHTML='<div class="center-card"><p>該当する注文履歴はありません。</p></div>';
+  }catch(e){alert(e.message)}
+}
+function renderHistoryCard(o){
+  const card=document.createElement('article');card.className='history-card';
+  card.innerHTML=`<h3>${escapeHtml(o.orderId)}</h3><div class="history-meta">${escapeHtml(o.createdAt)}／${escapeHtml(o.status||'')}</div>
+    <div>${escapeHtml(o.deliveryDate||o.deliveryCondition||'希望日未指定')}・${escapeHtml(o.receiveMethod||'')}</div>
+    <ul class="history-items">${o.items.map(x=>`<li>${escapeHtml(x.productName)}　${escapeHtml(x.quantity)} ${escapeHtml(x.unit)}</li>`).join('')}</ul>
+    <div class="history-actions"><button class="button button-secondary same">同じ内容で再発注</button><button class="button button-primary edit">内容を変更して再発注</button></div>`;
+  card.querySelector('.same').onclick=()=>copyHistoryToForm(o,false);
+  card.querySelector('.edit').onclick=()=>copyHistoryToForm(o,true);
+  byId('historyList').appendChild(card);
+}
+function copyHistoryToForm(o,editable){
+  byId('itemsContainer').innerHTML='';
+  o.items.forEach(x=>addItem(x));
+  byId('deliveryDate').value='';byId('deliveryCondition').value='';
+  byId('preferredTime').value=o.preferredTime||'';
+  byId('orderNote').value=o.orderNote||'';
+  const r=[...document.querySelectorAll('input[name="receiveMethod"]')].find(x=>x.value===o.receiveMethod);if(r&&!r.disabled)r.checked=true;
+  state.pendingOrder={reorderSourceId:o.orderId};
+  switchTab('new');scrollTo(0,0);
+  alert(editable?'過去の内容を入力しました。必要な箇所を修正してください。':'過去の内容を入力しました。希望日を指定して発注してください。');
 }
 
-function showConfirmation(event) {
-  event.preventDefault();
-  try {
-    state.pendingOrder = collectOrder();
-    const o = state.pendingOrder;
-    const items = o.items.map((x,i) => `<div class="summary-card"><h2>商品 ${i+1}</h2><dl>
-      ${row('商品',x.productName)}${row('数量',`${x.quantity} ${x.unit}`)}${row('備考',x.note||'なし')}</dl></div>`).join('');
-    document.getElementById('confirmationContent').innerHTML = `<div class="summary-card"><dl>
-      ${row('取引先',state.customer.customerName)}${row('希望日',o.deliveryDate)}
-      ${row('受取方法',o.receiveMethod)}${row('希望時間帯',o.preferredTime||'指定なし')}
-      ${row('全体備考',o.orderNote||'なし')}</dl></div>${items}`;
-    showView('confirmView'); scrollTo(0,0);
-  } catch(e) { alert(e.message); }
+function submitOrder(){
+  const b=byId('submitButton');b.disabled=true;b.textContent='送信しています…';
+  const form=document.createElement('form');form.method='POST';form.action=CONFIG.GAS_WEB_APP_URL;form.target='submitFrame';form.className='hidden';
+  const fields={action:'submitOrder',idToken:state.idToken,payload:JSON.stringify(state.pendingOrder),origin:location.origin};
+  Object.entries(fields).forEach(([n,v])=>{const i=document.createElement('input');i.name=n;i.value=v;form.appendChild(i)});
+  document.body.appendChild(form);form.submit();form.remove();
+  clearTimeout(submitTimer);submitTimer=setTimeout(()=>{b.disabled=false;b.textContent='この内容で発注する';alert('注文送信がタイムアウトしました。')},30000)
 }
-
-function submitOrder() {
-  if (!state.pendingOrder) return;
-  const button = document.getElementById('submitButton');
-  button.disabled = true; button.textContent = '送信しています…';
-
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = CONFIG.GAS_WEB_APP_URL;
-  form.target = 'submitFrame';
-  form.className = 'hidden';
-
-  const fields = {
-    action: 'submitOrder',
-    idToken: state.idToken,
-    payload: JSON.stringify(state.pendingOrder),
-    origin: location.origin
-  };
-  Object.entries(fields).forEach(([name,value]) => {
-    const input = document.createElement('input');
-    input.name = name; input.value = value; form.appendChild(input);
-  });
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
-
-  clearTimeout(submitTimer);
-  submitTimer = setTimeout(() => {
-    button.disabled = false; button.textContent = 'この内容で発注する';
-    alert('注文送信がタイムアウトしました。通信状態を確認してください。');
-  }, 30000);
+function receiveSubmitResult(e){
+  if(!e.data||e.data.source!=='MeatFlowAppsScript')return;
+  clearTimeout(submitTimer);const b=byId('submitButton');b.disabled=false;b.textContent='この内容で発注する';
+  if(!e.data.ok)return alert(e.data.error||'注文を保存できませんでした。');
+  byId('completedOrderId').textContent=e.data.orderId;showOnly('completeView')
 }
-
-function receiveSubmitResult(event) {
-  if (!event.data || event.data.source !== 'MeatFlowAppsScript') return;
-  clearTimeout(submitTimer);
-  const button = document.getElementById('submitButton');
-  button.disabled = false; button.textContent = 'この内容で発注する';
-
-  if (!event.data.ok) return alert('注文を保存できませんでした。\n' + (event.data.error || '不明なエラー'));
-  document.getElementById('completedOrderId').textContent = event.data.orderId;
-  showView('completeView'); scrollTo(0,0);
+function jsonp(action,params={}){
+  return new Promise((resolve,reject)=>{
+    const cb='__mf'+(++jsonpCounter),s=document.createElement('script'),t=setTimeout(()=>done(new Error('Apps Scriptとの通信がタイムアウトしました。')),20000);
+    function done(err,val){clearTimeout(t);delete window[cb];s.remove();err?reject(err):resolve(val)}
+    window[cb]=v=>done(null,v);s.onerror=()=>done(new Error('Apps Script APIを読み込めませんでした。'));
+    const u=new URL(CONFIG.GAS_WEB_APP_URL);u.searchParams.set('action',action);u.searchParams.set('callback',cb);Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));s.src=u;document.head.appendChild(s)
+  })
 }
-
-function row(label,value) {
-  return `<div class="summary-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
-}
-function setMinimumDate() {
-  const d = new Date(), local = new Date(d.getTime()-d.getTimezoneOffset()*60000);
-  document.getElementById('deliveryDate').min = local.toISOString().slice(0,10);
-}
-function showView(id) {
-  ['loadingView','errorView','appView','confirmView','completeView'].forEach(x =>
-    document.getElementById(x).classList.toggle('hidden', x !== id));
-}
-function setLoading(s) { document.getElementById('loadingMessage').textContent = s; }
-function showError(e) { document.getElementById('errorMessage').textContent = e?.message || String(e); showView('errorView'); }
-function closeWindow() { if (liff.isInClient()) liff.closeWindow(); }
-function withTimeout(p,ms,msg) { return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error(msg)),ms))]); }
-function escapeHtml(v) { return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;'); }
+function validateConfig(){if(!CONFIG.LIFF_ID||!CONFIG.GAS_WEB_APP_URL)throw new Error('config.jsの設定が不足しています。')}
+function showOnly(id){['loadingView','errorView','mainView','confirmView','completeView'].forEach(x=>byId(x).classList.toggle('hidden',x!==id))}
+function byId(x){return document.getElementById(x)}function renumber(){document.querySelectorAll('.item-card').forEach((x,i)=>x.querySelector('.item-number').textContent=`商品 ${i+1}`)}
+function row(a,b){return `<div class="summary-row"><dt>${escapeHtml(a)}</dt><dd>${escapeHtml(b)}</dd></div>`}
+function escapeHtml(v){return String(v??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')}
+function timeout(p,ms,msg){return Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(new Error(msg)),ms))])}
+function setMinimumDate(){const d=new Date(),l=new Date(d.getTime()-d.getTimezoneOffset()*60000);byId('deliveryDate').min=l.toISOString().slice(0,10)}

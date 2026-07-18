@@ -193,3 +193,42 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
 @media(max-width:420px){
   .four-tabs .tab-button{font-size:.69rem}
 }
+
+
+/* v0.9 AI商品マスター照合 */
+.ai-product-match{
+  margin:8px 0 12px;
+  padding:11px 12px;
+  border-radius:10px;
+  font-size:.86rem;
+  line-height:1.55;
+}
+.ai-product-match strong,
+.ai-product-match span{display:block}
+.ai-match-fuzzy{
+  border:1px solid #dfbd61;
+  background:#fff8dc;
+  color:#6b4c00;
+}
+.ai-match-ambiguous,
+.ai-match-unmatched{
+  border:1px solid #d58b8b;
+  background:#fff0f0;
+  color:#762424;
+}
+.ai-candidate-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:9px;
+}
+.ai-candidate-button{
+  min-height:38px;
+  padding:7px 11px;
+  border:1px solid #b7a98e;
+  border-radius:9px;
+  background:#fff;
+  color:#202020;
+  font-weight:700;
+  cursor:pointer;
+}

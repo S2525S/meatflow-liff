@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#67372b">
+  <meta name="theme-color" content="#1e1e1e">
   <title>MeatFlow LINE受注</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -22,10 +22,30 @@
     <button id="retryButton" class="button button-primary">もう一度試す</button>
   </section>
 
+  <section id="registrationView" class="center-card hidden">
+    <p class="eyebrow">🐂 MeatFlow</p>
+    <h1>店舗アカウント登録</h1>
+    <p class="small-note">管理者から案内された情報を入力してください。</p>
+    <form id="registrationForm">
+      <label class="field"><span>取引先コード</span><input id="registrationCustomerCode" required autocomplete="off"></label>
+      <label class="field"><span>登録用コード</span><input id="registrationCode" required inputmode="numeric" autocomplete="one-time-code"></label>
+      <label class="field"><span>担当者名</span><input id="registrationMemberName" required autocomplete="name"></label>
+      <button id="registrationSubmitButton" class="button button-primary button-large" type="submit">登録する</button>
+    </form>
+    <p id="registrationMessage" class="small-note"></p>
+  </section>
+
+  <section id="pendingView" class="center-card hidden">
+    <p class="eyebrow">🐂 MeatFlow</p>
+    <h1>承認待ちです</h1>
+    <p>管理者の承認後に発注できます。</p>
+    <button id="pendingRetryButton" class="button button-primary">承認状況を再確認</button>
+  </section>
+
   <section id="mainView" class="hidden">
     <header class="app-header">
-      <div><p class="eyebrow">MeatFlow</p><h1 id="screenTitle">新規発注</h1></div>
-      <div class="customer-box"><span>発注元</span><strong id="customerName">―</strong></div>
+      <div><p class="eyebrow">🐂 MeatFlow</p><h1 id="screenTitle">新規発注</h1></div>
+      <div class="customer-box"><span>発注元</span><strong id="customerName">―</strong><small id="memberName"></small></div>
     </header>
 
     <nav class="tab-bar">
@@ -34,6 +54,11 @@
     </nav>
 
     <section id="newOrderPanel">
+      <div id="draftNotice" class="notice hidden">
+        <span id="draftNoticeText"></span>
+        <button id="deleteDraftButton" type="button" class="link-button">下書きを削除</button>
+      </div>
+
       <form id="orderForm" novalidate>
         <section class="card">
           <h2>1. ご希望日</h2>
@@ -82,7 +107,8 @@
           <textarea id="orderNote" rows="3" placeholder="配送や加工に関するご要望など"></textarea>
         </section>
 
-        <div class="sticky-actions">
+        <div class="sticky-actions two-buttons">
+          <button id="saveDraftButton" class="button button-secondary button-large" type="button">下書き保存</button>
           <button class="button button-primary button-large" type="submit">注文内容を確認する</button>
         </div>
       </form>
@@ -92,18 +118,19 @@
       <section class="card">
         <h2>注文履歴</h2>
         <div class="history-filters">
-          <input id="historyKeyword" type="search" placeholder="商品名・注文番号で検索">
+          <input id="historyKeyword" type="search" placeholder="商品名・注文番号・担当者名で検索">
           <button id="historySearchButton" class="button button-secondary" type="button">検索</button>
         </div>
-        <p class="small-note">過去の注文をすべて確認できます。20件ずつ読み込みます。</p>
+        <p class="small-note">過去の注文を20件ずつ表示します。</p>
       </section>
+      <div id="historyLoading" class="center-inline hidden">履歴を読み込んでいます…</div>
       <div id="historyList"></div>
       <button id="loadMoreHistoryButton" class="button button-secondary button-large hidden" type="button">さらに20件を表示</button>
     </section>
   </section>
 
   <section id="confirmView" class="hidden">
-    <header class="app-header"><div><p class="eyebrow">MeatFlow</p><h1>注文内容の確認</h1></div></header>
+    <header class="app-header"><div><p class="eyebrow">🐂 MeatFlow</p><h1>注文内容の確認</h1></div></header>
     <div id="confirmationContent"></div>
     <div class="sticky-actions two-buttons">
       <button id="editButton" class="button button-secondary button-large" type="button">内容を修正する</button>
@@ -124,14 +151,10 @@
       <strong class="item-number">商品 1</strong>
       <button type="button" class="remove-item-button">削除</button>
     </div>
-    <label class="field">
-      <span>商品 <em>必須</em></span>
-      <select class="product-select" required>
-        <option value="">商品を選択してください</option>
-      </select>
+    <label class="field"><span>商品 <em>必須</em></span>
+      <select class="product-select" required><option value="">商品を選択してください</option></select>
     </label>
-    <label class="field other-name-field hidden">
-      <span>その他の商品名 <em>必須</em></span>
+    <label class="field other-name-field hidden"><span>その他の商品名 <em>必須</em></span>
       <input class="other-name-input" type="text" placeholder="例：厚切り牛タン">
       <small>送信後、得意先別商品の「未確認」として登録されます。</small>
     </label>

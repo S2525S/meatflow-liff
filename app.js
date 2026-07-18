@@ -130,9 +130,10 @@ function switchTab(tab) {
   byId('newOrderTab').classList.toggle('active', isNew);
   byId('favoriteTab').classList.toggle('active', isFavorite);
   byId('historyTab').classList.toggle('active', isHistory);
-  byId('screenTitle').textContent = isNew
-    ? '株式会社髙那（担たん亭）への発注'
-    : isFavorite ? 'お気に入りセット' : '注文履歴から発注';
+  byId('screenTitle').innerHTML = isNew
+    ? '<span class="company-title">株式会社髙那（担たん亭）</span><span class="system-title">発注システム</span>'
+    : isFavorite ? '<span class="single-title">お気に入りセット</span>'
+      : '<span class="single-title">注文履歴から発注</span>';
   if (isHistory && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
 }
 

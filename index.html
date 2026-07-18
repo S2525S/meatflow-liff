@@ -63,8 +63,8 @@
 
     <nav class="tab-bar three-tabs">
       <button id="newOrderTab" class="tab-button active" type="button">発注</button>
-      <button id="favoriteTab" class="tab-button" type="button">お気に入りセット</button>
-      <button id="historyTab" class="tab-button" type="button">注文履歴から発注</button>
+      <button id="favoriteTab" class="tab-button" type="button">お気に入り</button>
+      <button id="historyTab" class="tab-button" type="button">履歴</button>
     </nav>
 
     <section id="newOrderPanel">
@@ -94,7 +94,7 @@
         <section class="card">
           <div class="section-heading">
             <h2>2. 商品</h2>
-            <button id="addItemButton" type="button" class="button button-secondary button-compact">＋ 商品を追加</button>
+            <button id="addItemButton" type="button" class="button button-secondary button-compact">＋追加</button>
           </div>
           <p class="small-note">この得意先に登録された商品を表示しています。単価は時価のため画面には表示しません。</p>
           <div id="itemsContainer"></div>
@@ -122,9 +122,12 @@
           <textarea id="orderNote" rows="3" placeholder="配送や加工に関するご要望など"></textarea>
         </section>
 
-        <div class="sticky-actions two-buttons">
-          <button id="saveDraftButton" class="button button-secondary button-large" type="button">下書き保存</button>
-          <button class="button button-primary button-large" type="submit">注文内容を確認する</button>
+        <div class="draft-action-row">
+          <button id="saveDraftButton" class="button button-secondary" type="button">下書き保存</button>
+        </div>
+        <div class="fixed-order-actions">
+          <button id="bottomAddItemButton" class="button button-secondary" type="button">＋追加</button>
+          <button class="button button-primary" type="submit">注文確認</button>
         </div>
       </form>
     </section>

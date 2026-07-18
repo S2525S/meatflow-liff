@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('pendingRetryButton').onclick = initializeApp;
   byId('registrationForm').onsubmit = registerMember;
   byId('addItemButton').onclick = () => addItem();
+  byId('bottomAddItemButton').onclick = () => addItem();
   byId('orderForm').onsubmit = showConfirmation;
   byId('editButton').onclick = () => showOnly('mainView');
   byId('submitButton').onclick = submitOrder;

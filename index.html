@@ -61,10 +61,11 @@
       </div>
     </header>
 
-    <nav class="tab-bar three-tabs">
+    <nav class="tab-bar four-tabs">
       <button id="newOrderTab" class="tab-button active" type="button">発注</button>
+      <button id="aiOrderTab" class="tab-button" type="button">AI受注</button>
       <button id="favoriteTab" class="tab-button" type="button">お気に入り</button>
-      <button id="historyTab" class="tab-button" type="button">履歴</button>
+      <button id="historyTab" class="tab-button" type="button">履歴から発注</button>
     </nav>
 
     <section id="newOrderPanel">
@@ -133,6 +134,48 @@
     </section>
 
 
+    <section id="aiOrderPanel" class="hidden">
+      <section class="card">
+        <h2>AI受注</h2>
+        <div class="important-notice">
+          <strong>AI解析だけでは発注されません。</strong>
+          <span>解析後に通常の発注画面へ移動し、内容を必ず確認・修正してください。</span>
+        </div>
+
+        <div class="ai-mode-tabs">
+          <button id="aiTextModeButton" class="button button-primary" type="button">直接入力・貼り付け</button>
+          <button id="aiFaxModeButton" class="button button-secondary" type="button">FAX画像</button>
+        </div>
+
+        <div id="aiTextMode">
+          <label class="field">
+            <span>注文内容を入力または貼り付け</span>
+            <textarea id="aiOrderText" rows="9" placeholder="例：明日&#10;牛タン 2kg&#10;ハラミ 3kg&#10;午前中希望"></textarea>
+          </label>
+        </div>
+
+        <div id="aiFaxMode" class="hidden">
+          <label class="field">
+            <span>FAX画像を選択</span>
+            <input id="aiFaxFile" type="file" accept="image/jpeg,image/png,image/webp">
+          </label>
+          <img id="aiFaxPreview" class="fax-preview hidden" alt="選択したFAX画像">
+          <p class="small-note">JPEG・PNG・WebPに対応。大きな画像は端末側で縮小して送信します。</p>
+        </div>
+
+        <button id="analyzeAiOrderButton" class="button button-primary button-large" type="button">AIで解析する</button>
+        <p id="aiAnalyzeStatus" class="small-note"></p>
+      </section>
+
+      <section id="aiResultPanel" class="card hidden">
+        <h2>解析結果</h2>
+        <div id="aiWarnings" class="ai-warnings hidden"></div>
+        <div id="aiResultSummary"></div>
+        <button id="applyAiResultButton" class="button button-primary button-large" type="button">発注画面で確認・修正する</button>
+        <p class="small-note">このボタンでは発注されません。通常の発注画面に内容を移すだけです。</p>
+      </section>
+    </section>
+
     <section id="favoritePanel" class="hidden">
       <section class="card">
         <h2>お気に入りセット</h2>
@@ -157,7 +200,7 @@
   </section>
 
   <section id="confirmView" class="hidden">
-    <header class="app-header"><div><p class="eyebrow">🐂 MeatFlow</p><h1>注文内容の確認</h1></div></header>
+    <header class="app-header"><div><p class="eyebrow">🐂 MeatFlow</p><h1>注文内容の確認</h1><p class="confirm-warning">内容を確認し、必要な場合は「内容を修正する」で戻ってください。</p></div></header>
     <div id="confirmationContent"></div>
     <div class="sticky-actions two-buttons">
       <button id="editButton" class="button button-secondary button-large" type="button">内容を修正する</button>

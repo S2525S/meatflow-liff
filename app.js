@@ -7,6 +7,7 @@ const state = {
   customer: null,
   member: null,
   products: [],
+  favorites: [],
   pendingOrder: null,
   historyPage: 0,
   historyHasMore: false,
@@ -27,12 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('submitButton').onclick = submitOrder;
   byId('closeButton').onclick = () => liff.isInClient() ? liff.closeWindow() : location.reload();
   byId('newOrderTab').onclick = () => switchTab('new');
+  byId('favoriteTab').onclick = () => switchTab('favorite');
   byId('historyTab').onclick = () => switchTab('history');
   byId('historySearchButton').onclick = () => loadHistory(true);
   byId('historyKeyword').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); loadHistory(true); } };
   byId('loadMoreHistoryButton').onclick = () => loadHistory(false);
   byId('saveDraftButton').onclick = saveDraft;
   byId('deleteDraftButton').onclick = deleteDraft;
+  byId('saveAsFavoriteButton').onclick = saveCurrentItemsAsFavorite;
   document.querySelectorAll('input[name="dateMode"]').forEach(x => x.onchange = updateDateMode);
   window.addEventListener('message', receiveSubmitResult);
   initializeApp();
@@ -67,11 +70,17 @@ async function initializeApp() {
     state.customer = data.customer;
     state.member = data.member || null;
     state.products = data.products || [];
+    state.favorites = data.favorites || [];
     if (!state.customer?.registered) throw new Error('このLINEアカウントは取引先登録されていません。');
 
     byId('customerName').textContent = state.customer.customerName || '取引先';
-    byId('memberName').textContent = state.member?.memberName || '';
+    byId('memberName').textContent = state.member?.memberName || state.profile?.displayName || '';
+    if (state.profile?.pictureUrl) {
+      byId('profileImage').src = state.profile.pictureUrl;
+      byId('profileImage').classList.remove('hidden');
+    }
     renderReceiveMethods();
+    renderFavorites();
     setMinimumDate();
     resetOrderForm();
     if (data.draft?.payload) {
@@ -113,12 +122,18 @@ async function registerMember(e) {
 
 function switchTab(tab) {
   const isNew = tab === 'new';
+  const isFavorite = tab === 'favorite';
+  const isHistory = tab === 'history';
   byId('newOrderPanel').classList.toggle('hidden', !isNew);
-  byId('historyPanel').classList.toggle('hidden', isNew);
+  byId('favoritePanel').classList.toggle('hidden', !isFavorite);
+  byId('historyPanel').classList.toggle('hidden', !isHistory);
   byId('newOrderTab').classList.toggle('active', isNew);
-  byId('historyTab').classList.toggle('active', !isNew);
-  byId('screenTitle').textContent = isNew ? '新規発注' : '注文履歴';
-  if (!isNew && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
+  byId('favoriteTab').classList.toggle('active', isFavorite);
+  byId('historyTab').classList.toggle('active', isHistory);
+  byId('screenTitle').textContent = isNew
+    ? '株式会社髙那（担たん亭）への発注'
+    : isFavorite ? 'お気に入りセット' : '注文履歴から発注';
+  if (isHistory && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
 }
 
 function renderReceiveMethods() {
@@ -288,6 +303,103 @@ function applyOrderToForm(order) {
   const receive = [...document.querySelectorAll('input[name="receiveMethod"]')].find(x => x.value === order.receiveMethod);
   if (receive) receive.checked = true;
   state.pendingOrder = { reorderSourceId: order.reorderSourceId || '' };
+}
+
+
+function collectFavoriteItems() {
+  return [...document.querySelectorAll('.item-card')].map((card, i) => {
+    const select = card.querySelector('.product-select');
+    const quantity = Number(card.querySelector('.quantity-input').value);
+    const unit = card.querySelector('.unit-input').value.trim();
+    if (!select.value) throw new Error(`${i + 1}件目の商品を選択してください。`);
+    const isOther = select.value === 'OTHER';
+    const productName = isOther
+      ? card.querySelector('.other-name-input').value.trim()
+      : (select.options[select.selectedIndex].dataset.productName || select.options[select.selectedIndex].textContent);
+    if (!productName) throw new Error(`${i + 1}件目の商品名を入力してください。`);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`${i + 1}件目の数量を正しく入力してください。`);
+    if (!unit) throw new Error(`${i + 1}件目の単位を入力してください。`);
+    return { productCode: select.value, productName, quantity, unit, note: card.querySelector('.item-note-input').value.trim(), isOther };
+  });
+}
+
+async function saveCurrentItemsAsFavorite() {
+  try {
+    const items = collectFavoriteItems();
+    const setName = prompt('お気に入りセット名を入力してください。（最大30文字）');
+    if (setName === null) return;
+    const result = await postAction('saveFavorite', { payload: JSON.stringify({ setName: setName.trim(), items }) });
+    if (!result.ok) throw new Error(result.error || 'お気に入りセットを保存できませんでした。');
+    state.favorites.unshift(result.favorite);
+    state.favorites = state.favorites.filter((x, i, a) => x && a.findIndex(y => y.favoriteId === x.favoriteId) === i);
+    renderFavorites();
+    alert('お気に入りセットを保存しました。');
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
+
+function renderFavorites() {
+  const list = byId('favoriteList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!state.favorites.length) {
+    list.innerHTML = '<div class="center-card compact"><p>お気に入りセットはまだありません。<br>発注画面で商品と数量を入力し、「現在の商品をお気に入りセットに保存」を押してください。</p></div>';
+    return;
+  }
+  state.favorites.forEach(favorite => {
+    const card = document.createElement('article');
+    card.className = 'favorite-card';
+    card.innerHTML = `<h3>${escapeHtml(favorite.setName)}</h3>
+      <div class="favorite-meta">更新：${escapeHtml(favorite.updatedByName || favorite.createdByName || '')} ${escapeHtml(favorite.updatedAt || favorite.createdAt || '')}</div>
+      <ul class="favorite-items">${(favorite.items || []).map(x => `<li>${escapeHtml(x.productName)}　${escapeHtml(x.quantity)} ${escapeHtml(x.unit)}</li>`).join('')}</ul>
+      <div class="favorite-actions">
+        <button class="button button-primary apply" type="button">発注に反映</button>
+        <button class="button button-secondary overwrite" type="button">現在の商品で上書き</button>
+        <button class="button button-secondary delete" type="button">削除</button>
+      </div>`;
+    card.querySelector('.apply').onclick = () => applyFavorite(favorite);
+    card.querySelector('.overwrite').onclick = () => overwriteFavorite(favorite);
+    card.querySelector('.delete').onclick = () => removeFavorite(favorite);
+    list.appendChild(card);
+  });
+}
+
+function applyFavorite(favorite) {
+  byId('itemsContainer').innerHTML = '';
+  (favorite.items || []).forEach(item => addItem(item));
+  if (!(favorite.items || []).length) addItem();
+  switchTab('new');
+  scrollTo(0, 0);
+  alert(`「${favorite.setName}」を発注画面に反映しました。希望日と受取方法を入力してください。`);
+}
+
+async function overwriteFavorite(favorite) {
+  try {
+    const items = collectFavoriteItems();
+    const setName = prompt('セット名を確認・変更してください。', favorite.setName);
+    if (setName === null) return;
+    if (!confirm(`「${setName.trim()}」を現在の商品内容で上書きしますか？`)) return;
+    const result = await postAction('saveFavorite', { payload: JSON.stringify({ favoriteId: favorite.favoriteId, setName: setName.trim(), items }) });
+    if (!result.ok) throw new Error(result.error || 'お気に入りセットを更新できませんでした。');
+    state.favorites = state.favorites.map(x => x.favoriteId === favorite.favoriteId ? result.favorite : x);
+    renderFavorites();
+    alert('お気に入りセットを更新しました。');
+  } catch (err) {
+    alert(err.message || String(err));
+  }
+}
+
+async function removeFavorite(favorite) {
+  if (!confirm(`「${favorite.setName}」を削除しますか？`)) return;
+  try {
+    const result = await postAction('deleteFavorite', { favoriteId: favorite.favoriteId });
+    if (!result.ok) throw new Error(result.error || 'お気に入りセットを削除できませんでした。');
+    state.favorites = state.favorites.filter(x => x.favoriteId !== favorite.favoriteId);
+    renderFavorites();
+  } catch (err) {
+    alert(err.message || String(err));
+  }
 }
 
 async function saveDraft() {

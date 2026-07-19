@@ -172,7 +172,7 @@ async function handleFaxFile(e) {
     return alert('JPEG・PNG・WebP画像を選択してください。');
   }
   try {
-    state.aiFaxData = await resizeImageForAi(file, 1100, 0.58);
+    state.aiFaxData = await resizeImageForAi(file, 900, 0.50);
     byId('aiFaxPreview').src = `data:${state.aiFaxData.mimeType};base64,${state.aiFaxData.base64}`;
     byId('aiFaxPreview').classList.remove('hidden');
     const kb = Math.max(1, Math.round(state.aiFaxData.approximateBytes / 1024));
@@ -183,7 +183,7 @@ async function handleFaxFile(e) {
   }
 }
 
-async function resizeImageForAi(file, maxSide, quality) {
+async function resizeImageForAi(file, maxSide = 900, quality = 0.50) {
   let bitmap;
   try {
     bitmap = 'createImageBitmap' in window
@@ -195,23 +195,31 @@ async function resizeImageForAi(file, maxSide, quality) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
 
-    const ctx = canvas.getContext('2d', { alpha: false });
-    ctx.fillStyle = '#ffffff';
+    const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
+    ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'medium';
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      let v = (gray - 128) * 1.28 + 142;
+      v = Math.max(0, Math.min(255, v));
+      if (v > 234) v = 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
 
     const dataUrl = canvas.toDataURL('image/jpeg', quality);
     const base64 = dataUrl.split(',')[1];
-    const approximateBytes = Math.round(base64.length * 0.75);
-
     return {
       mimeType: 'image/jpeg',
       base64,
       width: canvas.width,
       height: canvas.height,
-      approximateBytes
+      approximateBytes: Math.round(base64.length * 0.75)
     };
   } finally {
     if (bitmap && typeof bitmap.close === 'function') bitmap.close();
@@ -252,7 +260,7 @@ async function analyzeAiOrder() {
         text,
         imageMimeType: isFax ? state.aiFaxData.mimeType : '',
         imageBase64: isFax ? state.aiFaxData.base64 : ''
-      }, isFax ? 55000 : 18000);
+      }, isFax ? 90000 : 20000);
       if (!result.ok) throw new Error(result.error || 'AI解析に失敗しました。');
     } catch (err) {
       if (isFax) throw err;

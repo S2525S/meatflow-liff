@@ -221,14 +221,19 @@ async function analyzeAiOrder() {
         text,
         imageMimeType: isFax ? state.aiFaxData.mimeType : '',
         imageBase64: isFax ? state.aiFaxData.base64 : ''
-      });
+      }, isFax ? 30000 : 15000);
       if (!result.ok) throw new Error(result.error || 'AI解析に失敗しました。');
     } catch (err) {
       if (isFax) throw err;
-      result = { ok: true, parsed: parseOrderTextLocally(text), fallback: true };
+      result = {
+        ok: true,
+        parsed: parseOrderTextLocally(text),
+        fallback: true,
+        fallbackReason: err && err.message ? err.message : String(err)
+      };
     }
     state.aiParsedOrder = normalizeAiParsedOrder(result.parsed || {});
-    renderAiResult(state.aiParsedOrder, Boolean(result.fallback));
+    renderAiResult(state.aiParsedOrder, Boolean(result.fallback), result.fallbackReason || '');
     byId('aiAnalyzeStatus').textContent = result.fallback
       ? '簡易解析を行いました。商品名・数量・単位を必ず確認してください。'
       : '解析が完了しました。内容を確認してください。';
@@ -263,14 +268,17 @@ function normalizeAiParsedOrder(parsed) {
   };
 }
 
-function renderAiResult(parsed, fallback) {
+function renderAiResult(parsed, fallback, fallbackReason = '') {
   const warnings = [...parsed.warnings];
   if (!parsed.items.length) warnings.push('商品を読み取れませんでした。');
   parsed.items.forEach((x, i) => {
     if (!x.quantity) warnings.push(`商品${i + 1}の数量を確認してください。`);
     if (!x.unit) warnings.push(`商品${i + 1}の単位を確認してください。`);
   });
-  if (fallback) warnings.unshift('AI APIを利用できなかったため、端末内の簡易解析結果です。');
+  if (fallback) {
+    warnings.unshift('AI APIを利用できなかったため、端末内の簡易解析結果です。');
+    if (fallbackReason) warnings.push('接続エラー: ' + fallbackReason);
+  }
 
   byId('aiWarnings').classList.toggle('hidden', !warnings.length);
   byId('aiWarnings').innerHTML = warnings.length
@@ -395,14 +403,14 @@ function addItem(data = null) {
       select.value = match.product.productCode;
       select.dispatchEvent(new Event('change'));
       card.dataset.aiMatchStatus = match.status;
-      card.dataset.aiOriginalName = data.productName || '';
+      card.dataset.aiOriginalName = data.originalProductName || data.productName || '';
       showAiProductMatchNotice(card, match);
     } else {
       select.value = 'OTHER';
       select.dispatchEvent(new Event('change'));
       otherInput.value = data.productName || '';
       card.dataset.aiMatchStatus = 'unmatched';
-      card.dataset.aiOriginalName = data.productName || '';
+      card.dataset.aiOriginalName = data.originalProductName || data.productName || '';
       showAiProductMatchNotice(card, match);
     }
     unit.value = data.unit || select.options[select.selectedIndex]?.dataset.defaultUnit || '';
@@ -444,7 +452,7 @@ function productSimilarity(a, b) {
 
 function resolveProductMatch(data) {
   const code = String(data?.productCode || '');
-  const name = String(data?.productName || '').trim();
+  const name = String(data?.originalProductName || data?.productName || '').trim();
 
   if (code) {
     const byCode = state.products.find(p => String(p.productCode) === code);
@@ -512,6 +520,34 @@ function showAiProductMatchNotice(card, match) {
 
   const select = card.querySelector('.product-select');
   select.closest('.item-card').querySelector('.item-heading').after(notice);
+}
+
+
+function rematchAiItems() {
+  [...document.querySelectorAll('.item-card')].forEach(card => {
+    const originalName = String(card.dataset.aiOriginalName || '').trim();
+    if (!originalName) return;
+    const select = card.querySelector('.product-select');
+    const otherInput = card.querySelector('.other-name-input');
+    const unit = card.querySelector('.unit-input');
+    const match = resolveProductMatch({
+      productName: originalName,
+      originalProductName: originalName
+    });
+
+    if (match.product) {
+      select.value = match.product.productCode;
+      select.dispatchEvent(new Event('change'));
+      card.dataset.aiMatchStatus = match.status;
+      if (!unit.value) unit.value = match.product.defaultUnit || 'kg';
+    } else {
+      select.value = 'OTHER';
+      select.dispatchEvent(new Event('change'));
+      otherInput.value = originalName;
+      card.dataset.aiMatchStatus = match.status || 'unmatched';
+    }
+    showAiProductMatchNotice(card, match);
+  });
 }
 
 function updateDateMode() {
@@ -592,6 +628,8 @@ function applyOrderToForm(order) {
   byId('itemsContainer').innerHTML = '';
   const items = Array.isArray(order.items) && order.items.length ? order.items : [null];
   items.forEach(item => addItem(item));
+  // LIFF/Safariのキャッシュや初期化順に左右されないよう、AI商品をもう一度照合する
+  requestAnimationFrame(() => rematchAiItems());
   byId('deliveryDate').value = order.deliveryDate || '';
   byId('deliveryCondition').value = order.deliveryCondition || '';
   byId('preferredTime').value = order.preferredTime || '';
@@ -867,12 +905,12 @@ function submitOrder() {
   }, 30000);
 }
 
-function postAction(action, extra = {}) {
+function postAction(action, extra = {}, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       window.removeEventListener('message', handler);
       reject(new Error('Apps Scriptとの通信がタイムアウトしました。'));
-    }, 30000);
+    }, timeoutMs);
     function handler(e) {
       if (!e.data || e.data.source !== 'MeatFlowAppsScript' || e.data.action !== action) return;
       clearTimeout(timeoutId);

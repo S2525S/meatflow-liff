@@ -249,3 +249,5 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   opacity:.65;
   cursor:wait;
 }
+
+#analyzeAiOrderButton:disabled{opacity:.65;cursor:wait}

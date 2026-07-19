@@ -232,3 +232,11 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   font-weight:700;
   cursor:pointer;
 }
+
+/* v0.9.1 */
+#aiAnalyzeStatus:not(:empty){
+  margin-top:10px;
+  padding:9px 11px;
+  border-radius:9px;
+  background:#f3efe5;
+}

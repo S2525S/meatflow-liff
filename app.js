@@ -172,31 +172,60 @@ async function handleFaxFile(e) {
     return alert('JPEG・PNG・WebP画像を選択してください。');
   }
   try {
-    state.aiFaxData = await resizeImageForAi(file, 1600, 0.82);
+    state.aiFaxData = await resizeImageForAi(file, 1100, 0.58);
     byId('aiFaxPreview').src = `data:${state.aiFaxData.mimeType};base64,${state.aiFaxData.base64}`;
     byId('aiFaxPreview').classList.remove('hidden');
+    const kb = Math.max(1, Math.round(state.aiFaxData.approximateBytes / 1024));
+    byId('aiAnalyzeStatus').textContent =
+      `画像を高速解析用に ${state.aiFaxData.width}×${state.aiFaxData.height}px・約${kb}KBへ圧縮しました。`;
   } catch (err) {
     alert(err.message || String(err));
   }
 }
 
-function resizeImageForAi(file, maxSide, quality) {
+async function resizeImageForAi(file, maxSide, quality) {
+  let bitmap;
+  try {
+    bitmap = 'createImageBitmap' in window
+      ? await createImageBitmap(file, { imageOrientation: 'from-image' })
+      : await loadImageBitmapFallback(file);
+
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'medium';
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    const base64 = dataUrl.split(',')[1];
+    const approximateBytes = Math.round(base64.length * 0.75);
+
+    return {
+      mimeType: 'image/jpeg',
+      base64,
+      width: canvas.width,
+      height: canvas.height,
+      approximateBytes
+    };
+  } finally {
+    if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+  }
+}
+
+function loadImageBitmapFallback(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('画像を読み込めませんでした。'));
     reader.onload = () => {
       const img = new Image();
       img.onerror = () => reject(new Error('画像形式を読み込めませんでした。'));
-      img.onload = () => {
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(img.width * scale));
-        canvas.height = Math.max(1, Math.round(img.height * scale));
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const dataUrl = canvas.toDataURL(mimeType, quality);
-        resolve({ mimeType, base64: dataUrl.split(',')[1] });
-      };
+      img.onload = () => resolve(img);
       img.src = String(reader.result);
     };
     reader.readAsDataURL(file);
@@ -212,7 +241,9 @@ async function analyzeAiOrder() {
   const button = byId('analyzeAiOrderButton');
   button.disabled = true;
   button.textContent = '解析しています…';
-  byId('aiAnalyzeStatus').textContent = 'AIが注文内容を読み取っています。発注はまだ行われません。';
+  byId('aiAnalyzeStatus').textContent = isFax
+    ? 'FAX画像を送信して解析しています。通常10〜30秒ほどです。発注はまだ行われません。'
+    : '注文内容を解析しています。発注はまだ行われません。';
   try {
     let result;
     try {
@@ -221,7 +252,7 @@ async function analyzeAiOrder() {
         text,
         imageMimeType: isFax ? state.aiFaxData.mimeType : '',
         imageBase64: isFax ? state.aiFaxData.base64 : ''
-      }, isFax ? 30000 : 15000);
+      }, isFax ? 55000 : 18000);
       if (!result.ok) throw new Error(result.error || 'AI解析に失敗しました。');
     } catch (err) {
       if (isFax) throw err;

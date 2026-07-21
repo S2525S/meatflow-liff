@@ -60,8 +60,19 @@ async function initializeApp() {
     state.idToken = liff.getIDToken();
     if (!state.idToken) throw new Error('LINE IDトークンを取得できません。');
 
+    if (isIdTokenExpired(state.idToken)) {
+      reloginLiff();
+      return;
+    }
+
     const data = await jsonp('bootstrap', { idToken: state.idToken });
-    if (!data.ok) throw new Error(data.error || '初期データを取得できません。');
+    if (!data.ok) {
+      if (/IdToken expired|token.*expired/i.test(String(data.error || ''))) {
+        reloginLiff();
+        return;
+      }
+      throw new Error(data.error || '初期データを取得できません。');
+    }
 
     if (data.registrationRequired) {
       showOnly('registrationView');
@@ -94,6 +105,25 @@ async function initializeApp() {
     byId('errorMessage').textContent = e.message || String(e);
     showOnly('errorView');
   }
+}
+
+
+function isIdTokenExpired(token) {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return false;
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(decodeURIComponent(escape(atob(base64))));
+    return Number(payload.exp || 0) * 1000 <= Date.now() + 30000;
+  } catch (_) {
+    return false;
+  }
+}
+
+function reloginLiff() {
+  try { liff.logout(); } catch (_) {}
+  const redirectUri = `${location.origin}${location.pathname}`;
+  liff.login({ redirectUri });
 }
 
 async function registerMember(e) {
@@ -368,32 +398,13 @@ async function saveDraft() {
 }
 
 async function deleteDraft() {
-  if (!confirm('保存した下書きを削除し、入力内容もリセットしますか？')) return;
-
-  const button = byId('deleteDraftButton');
-  const status = byId('draftSaveStatus');
-  button.disabled = true;
-  button.textContent = '削除中…';
-  status.textContent = '下書きを削除しています。';
-
+  if (!confirm('保存した下書きを削除しますか？')) return;
   try {
     const result = await postAction('deleteDraft');
     if (!result.ok) throw new Error(result.error || '下書きを削除できませんでした。');
-
-    resetOrderForm();
     byId('draftNotice').classList.add('hidden');
-    byId('draftNoticeText').textContent = '';
-    status.textContent = '✓ 下書きを削除し、入力内容をリセットしました。';
-
-    setTimeout(() => {
-      status.textContent = '';
-    }, 2200);
   } catch (err) {
-    status.textContent = `削除できませんでした：${err.message || String(err)}`;
     alert(err.message || String(err));
-  } finally {
-    button.disabled = false;
-    button.textContent = '下書きを削除';
   }
 }
 
@@ -609,8 +620,8 @@ function renderFavorites() {
       <div class="history-actions">
         <button class="button button-primary use" type="button">発注に使う</button>
         <button class="button button-secondary edit-favorite" type="button">内容を修正</button>
-        <button class="button button-secondary move-up" type="button" ${index === 0 ? 'disabled' : ''}>▲ 上へ</button>
-        <button class="button button-secondary move-down" type="button" ${index === state.favorites.length - 1 ? 'disabled' : ''}>▼ 下へ</button>
+        <button class="button button-secondary move-up" type="button" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button class="button button-secondary move-down" type="button" ${index === state.favorites.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="button button-secondary delete-favorite" type="button">削除</button>
       </div>`;
 

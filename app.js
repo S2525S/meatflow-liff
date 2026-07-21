@@ -398,13 +398,46 @@ async function saveDraft() {
 }
 
 async function deleteDraft() {
-  if (!confirm('保存した下書きを削除しますか？')) return;
+  if (!confirm('保存した下書きを削除し、現在の入力内容もすべて消去しますか？')) return;
+
+  const button = byId('deleteDraftButton');
+  const status = byId('draftSaveStatus');
+
+  button.disabled = true;
+  button.textContent = '削除しています…';
+  if (status) status.textContent = '下書きを削除しています。';
+
   try {
     const result = await postAction('deleteDraft');
     if (!result.ok) throw new Error(result.error || '下書きを削除できませんでした。');
+
+    // サーバー上の下書き削除後、画面上の入力内容も完全に初期化する
+    state.pendingOrder = null;
+    resetOrderForm();
+    renderReceiveMethods();
+
+    // 下書き表示・メッセージを完全に消す
     byId('draftNotice').classList.add('hidden');
+    byId('draftNoticeText').textContent = '';
+    if (status) status.textContent = '✓ 下書きを削除しました。入力欄も初期化しました。';
+
+    button.textContent = '✓ 削除しました';
+
+    // 新規注文画面を確実に表示する
+    showOnly('mainView');
+    switchTab('new');
+    window.scrollTo(0, 0);
+
+    setTimeout(() => {
+      button.textContent = '下書きを削除';
+      if (status) status.textContent = '';
+    }, 2000);
   } catch (err) {
+    if (status) status.textContent = `削除できませんでした：${err.message || String(err)}`;
+    button.textContent = '下書きを削除';
     alert(err.message || String(err));
+  } finally {
+    button.disabled = false;
   }
 }
 

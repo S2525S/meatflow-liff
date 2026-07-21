@@ -7,15 +7,13 @@ const state = {
   customer: null,
   member: null,
   products: [],
-  favorites: [],
   pendingOrder: null,
   historyPage: 0,
   historyHasMore: false,
   historyLoading: false,
   historyRequestId: 0,
   renderedOrderIds: new Set(),
-  aiParsedOrder: null,
-  aiFaxData: null
+  favorites: []
 };
 let jsonpCounter = 0;
 let submitTimer = null;
@@ -25,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('pendingRetryButton').onclick = initializeApp;
   byId('registrationForm').onsubmit = registerMember;
   byId('addItemButton').onclick = () => addItem();
-  byId('bottomAddItemButton').onclick = () => addItem();
   byId('orderForm').onsubmit = showConfirmation;
   byId('editButton').onclick = () => showOnly('mainView');
   byId('submitButton').onclick = submitOrder;
@@ -39,12 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('loadMoreHistoryButton').onclick = () => loadHistory(false);
   byId('saveDraftButton').onclick = saveDraft;
   byId('deleteDraftButton').onclick = deleteDraft;
-  byId('saveAsFavoriteButton').onclick = saveCurrentItemsAsFavorite;
-  byId('aiTextModeButton').onclick = () => setAiMode('text');
-  byId('aiFaxModeButton').onclick = () => setAiMode('fax');
-  byId('aiFaxFile').onchange = handleFaxFile;
-  byId('analyzeAiOrderButton').onclick = analyzeAiOrder;
-  byId('applyAiResultButton').onclick = applyAiResultToOrder;
+  byId('saveAsFavoriteButton').onclick = () => openFavoriteEditor(null, collectCurrentItemsForFavorite());
+  byId('newFavoriteButton').onclick = () => openFavoriteEditor();
+  byId('addFavoriteItemButton').onclick = () => addItem(null, 'favoriteEditorItems');
+  byId('cancelFavoriteEditButton').onclick = closeFavoriteEditor;
+  byId('saveFavoriteEditorButton').onclick = saveFavoriteFromEditor;
   document.querySelectorAll('input[name="dateMode"]').forEach(x => x.onchange = updateDateMode);
   window.addEventListener('message', receiveSubmitResult);
   initializeApp();
@@ -67,8 +63,6 @@ async function initializeApp() {
     const data = await jsonp('bootstrap', { idToken: state.idToken });
     if (!data.ok) throw new Error(data.error || '初期データを取得できません。');
 
-    sessionStorage.removeItem('meatflow_liff_reauth_attempted');
-
     if (data.registrationRequired) {
       showOnly('registrationView');
       return;
@@ -81,17 +75,12 @@ async function initializeApp() {
     state.customer = data.customer;
     state.member = data.member || null;
     state.products = data.products || [];
-    state.favorites = data.favorites || [];
+    state.favorites = Array.isArray(data.favorites) ? data.favorites : [];
     if (!state.customer?.registered) throw new Error('このLINEアカウントは取引先登録されていません。');
 
     byId('customerName').textContent = state.customer.customerName || '取引先';
-    byId('memberName').textContent = state.member?.memberName || state.profile?.displayName || '';
-    if (state.profile?.pictureUrl) {
-      byId('profileImage').src = state.profile.pictureUrl;
-      byId('profileImage').classList.remove('hidden');
-    }
+    byId('memberName').textContent = state.member?.memberName || '';
     renderReceiveMethods();
-    renderFavorites();
     setMinimumDate();
     resetOrderForm();
     if (data.draft?.payload) {
@@ -102,34 +91,7 @@ async function initializeApp() {
     showOnly('mainView');
     switchTab('new');
   } catch (e) {
-    const message = e?.message || String(e);
-
-    if (/access token expired|idtoken expired|invalid_request|token revoked/i.test(message)) {
-      const retryKey = 'meatflow_liff_reauth_attempted';
-
-      if (!sessionStorage.getItem(retryKey)) {
-        sessionStorage.setItem(retryKey, '1');
-
-        try {
-          if (liff.isLoggedIn()) liff.logout();
-
-          const params = new URLSearchParams(location.search);
-          const liffState = params.get('liff.state');
-          const redirectUri = liffState
-            ? new URL('.' + liffState, location.href).toString()
-            : location.href.split('#')[0];
-
-          liff.login({ redirectUri });
-          return;
-        } catch (loginError) {
-          console.error('LIFF再ログインに失敗しました。', loginError);
-        }
-      }
-    } else {
-      sessionStorage.removeItem('meatflow_liff_reauth_attempted');
-    }
-
-    byId('errorMessage').textContent = message;
+    byId('errorMessage').textContent = e.message || String(e);
     showOnly('errorView');
   }
 }
@@ -159,244 +121,32 @@ async function registerMember(e) {
 }
 
 function switchTab(tab) {
-  const isNew = tab === 'new';
-  const isAi = tab === 'ai';
-  const isFavorite = tab === 'favorite';
-  const isHistory = tab === 'history';
-  byId('newOrderPanel').classList.toggle('hidden', !isNew);
-  byId('aiOrderPanel').classList.toggle('hidden', !isAi);
-  byId('favoritePanel').classList.toggle('hidden', !isFavorite);
-  byId('historyPanel').classList.toggle('hidden', !isHistory);
-  byId('newOrderTab').classList.toggle('active', isNew);
-  byId('aiOrderTab').classList.toggle('active', isAi);
-  byId('favoriteTab').classList.toggle('active', isFavorite);
-  byId('historyTab').classList.toggle('active', isHistory);
-  byId('screenTitle').innerHTML = isNew
-    ? '<span class="company-title">株式会社髙那（担たん亭）</span><span class="system-title">発注システム</span>'
-    : isAi ? '<span class="single-title">AI受注</span>'
-      : isFavorite ? '<span class="single-title">お気に入りセット</span>'
-        : '<span class="single-title">注文履歴から発注</span>';
-  if (isHistory && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
-}
-
-
-function setAiMode(mode) {
-  const isText = mode === 'text';
-  byId('aiTextMode').classList.toggle('hidden', !isText);
-  byId('aiFaxMode').classList.toggle('hidden', isText);
-  byId('aiTextModeButton').className = `button ${isText ? 'button-primary' : 'button-secondary'}`;
-  byId('aiFaxModeButton').className = `button ${isText ? 'button-secondary' : 'button-primary'}`;
-  byId('aiAnalyzeStatus').textContent = '';
-  state.aiParsedOrder = null;
-  byId('aiResultPanel').classList.add('hidden');
-}
-
-async function handleFaxFile(e) {
-  const file = e.target.files?.[0];
-  state.aiFaxData = null;
-  byId('aiFaxPreview').classList.add('hidden');
-  if (!file) return;
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
-    e.target.value = '';
-    return alert('JPEG・PNG・WebP画像を選択してください。');
-  }
-  try {
-    state.aiFaxData = await resizeImageForAi(file, 900, 0.50);
-    byId('aiFaxPreview').src = `data:${state.aiFaxData.mimeType};base64,${state.aiFaxData.base64}`;
-    byId('aiFaxPreview').classList.remove('hidden');
-    const kb = Math.max(1, Math.round(state.aiFaxData.approximateBytes / 1024));
-    byId('aiAnalyzeStatus').textContent =
-      `画像を高速解析用に ${state.aiFaxData.width}×${state.aiFaxData.height}px・約${kb}KBへ圧縮しました。`;
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-async function resizeImageForAi(file, maxSide = 900, quality = 0.50) {
-  let bitmap;
-  try {
-    bitmap = 'createImageBitmap' in window
-      ? await createImageBitmap(file, { imageOrientation: 'from-image' })
-      : await loadImageBitmapFallback(file);
-
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      let v = (gray - 128) * 1.28 + 142;
-      v = Math.max(0, Math.min(255, v));
-      if (v > 234) v = 255;
-      d[i] = d[i + 1] = d[i + 2] = v;
-      d[i + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
-
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-    const base64 = dataUrl.split(',')[1];
-    return {
-      mimeType: 'image/jpeg',
-      base64,
-      width: canvas.width,
-      height: canvas.height,
-      approximateBytes: Math.round(base64.length * 0.75)
-    };
-  } finally {
-    if (bitmap && typeof bitmap.close === 'function') bitmap.close();
-  }
-}
-
-function loadImageBitmapFallback(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('画像を読み込めませんでした。'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('画像形式を読み込めませんでした。'));
-      img.onload = () => resolve(img);
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function analyzeAiOrder() {
-  const isFax = !byId('aiFaxMode').classList.contains('hidden');
-  const text = byId('aiOrderText').value.trim();
-  if (!isFax && !text) return alert('注文内容を入力または貼り付けしてください。');
-  if (isFax && !state.aiFaxData) return alert('FAX画像を選択してください。');
-
-  const button = byId('analyzeAiOrderButton');
-  button.disabled = true;
-  button.textContent = '解析しています…';
-  byId('aiAnalyzeStatus').textContent = isFax
-    ? 'FAX画像を送信して解析しています。通常10〜30秒ほどです。発注はまだ行われません。'
-    : '注文内容を解析しています。発注はまだ行われません。';
-  try {
-    let result;
-    try {
-      result = await postAction('parseAiOrder', {
-        inputType: isFax ? 'fax' : 'text',
-        text,
-        imageMimeType: isFax ? state.aiFaxData.mimeType : '',
-        imageBase64: isFax ? state.aiFaxData.base64 : ''
-      }, isFax ? 90000 : 20000);
-      if (!result.ok) throw new Error(result.error || 'AI解析に失敗しました。');
-    } catch (err) {
-      if (isFax) throw err;
-      result = {
-        ok: true,
-        parsed: parseOrderTextLocally(text),
-        fallback: true,
-        fallbackReason: err && err.message ? err.message : String(err)
-      };
-    }
-    state.aiParsedOrder = normalizeAiParsedOrder(result.parsed || {});
-    renderAiResult(state.aiParsedOrder, Boolean(result.fallback), result.fallbackReason || '');
-    byId('aiAnalyzeStatus').textContent = result.fallback
-      ? '簡易解析を行いました。商品名・数量・単位を必ず確認してください。'
-      : '解析が完了しました。内容を確認してください。';
-  } catch (err) {
-    byId('aiAnalyzeStatus').textContent = '';
-    alert(err.message || String(err));
-  } finally {
-    button.disabled = false;
-    button.textContent = 'AIで解析する';
-  }
-}
-
-function normalizeAiParsedOrder(parsed) {
-  const items = Array.isArray(parsed.items) ? parsed.items : [];
-  return {
-    deliveryDate: String(parsed.deliveryDate || ''),
-    deliveryCondition: String(parsed.deliveryCondition || ''),
-    receiveMethod: String(parsed.receiveMethod || ''),
-    preferredTime: String(parsed.preferredTime || ''),
-    orderNote: String(parsed.orderNote || ''),
-    items: items.map(x => ({
-      productCode: String(x.productCode || ''),
-      productName: String(x.productName || ''),
-      originalProductName: String(x.originalProductName || x.productName || ''),
-      matchStatus: String(x.matchStatus || ''),
-      candidates: Array.isArray(x.candidates) ? x.candidates : [],
-      quantity: Number(x.quantity || 0),
-      unit: String(x.unit || ''),
-      note: String(x.note || '')
-    })).filter(x => x.productName || x.productCode),
-    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : []
+  const panels = {
+    new: 'newOrderPanel',
+    ai: 'aiOrderPanel',
+    favorite: 'favoritePanel',
+    history: 'historyPanel'
   };
-}
-
-function renderAiResult(parsed, fallback, fallbackReason = '') {
-  const warnings = [...parsed.warnings];
-  if (!parsed.items.length) warnings.push('商品を読み取れませんでした。');
-  parsed.items.forEach((x, i) => {
-    if (!x.quantity) warnings.push(`商品${i + 1}の数量を確認してください。`);
-    if (!x.unit) warnings.push(`商品${i + 1}の単位を確認してください。`);
-  });
-  if (fallback) {
-    warnings.unshift('AI APIを利用できなかったため、端末内の簡易解析結果です。');
-    if (fallbackReason) warnings.push('接続エラー: ' + fallbackReason);
-  }
-
-  byId('aiWarnings').classList.toggle('hidden', !warnings.length);
-  byId('aiWarnings').innerHTML = warnings.length
-    ? `<strong>確認が必要です</strong><ul>${warnings.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`
-    : '';
-
-  const items = parsed.items.length
-    ? `<ul class="ai-result-items">${parsed.items.map(x => `<li><strong>${escapeHtml(x.productName || '商品名不明')}</strong>　${escapeHtml(x.quantity || '数量不明')} ${escapeHtml(x.unit || '単位不明')}</li>`).join('')}</ul>`
-    : '<p>商品を読み取れませんでした。</p>';
-
-  byId('aiResultSummary').innerHTML =
-    `<dl class="ai-summary">${row('希望日', parsed.deliveryDate || parsed.deliveryCondition || '未判定')}${row('受取方法', parsed.receiveMethod || '未判定')}${row('時間帯', parsed.preferredTime || '未判定')}${row('備考', parsed.orderNote || 'なし')}</dl>${items}`;
-  byId('aiResultPanel').classList.remove('hidden');
-}
-
-function applyAiResultToOrder() {
-  if (!state.aiParsedOrder) return;
-  const p = state.aiParsedOrder;
-  applyOrderToForm({
-    deliveryDate: p.deliveryDate,
-    deliveryCondition: p.deliveryCondition,
-    receiveMethod: p.receiveMethod,
-    preferredTime: p.preferredTime,
-    orderNote: p.orderNote,
-    items: p.items
-  });
-  switchTab('new');
-  scrollTo(0, 0);
-  alert('解析結果を発注画面へ入力しました。商品・数量・単位・希望日を必ず確認し、必要な箇所を修正してください。');
-}
-
-function parseOrderTextLocally(text) {
-  const items = [];
-  const warnings = [];
-  const lines = String(text).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-  const itemPattern = /^(.+?)\s*[：:、,\s]\s*(\d+(?:\.\d+)?)\s*(kg|g|本|個|枚|パック|箱|ケース|袋)?(?:\s+(.*))?$/i;
-  for (const line of lines) {
-    const m = line.match(itemPattern);
-    if (m) items.push({ productName: m[1].trim(), quantity: Number(m[2]), unit: m[3] || '', note: m[4] || '' });
-  }
-  if (!items.length) warnings.push('「商品名 数量 単位」の形式で読み取れる商品がありませんでした。');
-  return {
-    deliveryDate: '',
-    deliveryCondition: /明日/.test(text) ? '明日' : (/最短/.test(text) ? '最短希望' : ''),
-    receiveMethod: /店舗|引取|受取/.test(text) ? '店舗受取（担たん亭でのお受け取り）' : (/配送/.test(text) ? '配送希望' : ''),
-    preferredTime: (text.match(/午前中|12時[〜～-]14時|14時[〜～-]16時|16時[〜～-]18時|18時以降/) || [''])[0],
-    orderNote: '',
-    items,
-    warnings
+  const tabs = {
+    new: 'newOrderTab',
+    ai: 'aiOrderTab',
+    favorite: 'favoriteTab',
+    history: 'historyTab'
   };
+
+  Object.entries(panels).forEach(([key, id]) => byId(id).classList.toggle('hidden', key !== tab));
+  Object.entries(tabs).forEach(([key, id]) => byId(id).classList.toggle('active', key === tab));
+
+  const titles = {
+    new: '新規発注',
+    ai: 'AI受注',
+    favorite: 'お気に入り',
+    history: '注文履歴'
+  };
+  byId('screenTitle').textContent = titles[tab] || '発注システム';
+
+  if (tab === 'favorite') renderFavorites();
+  if (tab === 'history' && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
 }
 
 function renderReceiveMethods() {
@@ -431,191 +181,71 @@ function resetOrderForm() {
   state.pendingOrder = null;
 }
 
-function addItem(data = null) {
+function addItem(data = null, containerId = 'itemsContainer') {
   const fragment = byId('itemTemplate').content.cloneNode(true);
   const card = fragment.querySelector('.item-card');
   const select = fragment.querySelector('.product-select');
   const unit = fragment.querySelector('.unit-input');
   const otherField = fragment.querySelector('.other-name-field');
   const otherInput = fragment.querySelector('.other-name-input');
+  const container = byId(containerId);
 
   state.products.forEach(p => {
     const option = document.createElement('option');
     option.value = p.productCode;
     option.textContent = p.displayName || p.productName;
     option.dataset.productName = p.productName;
-    option.dataset.defaultUnit = p.defaultUnit || 'kg';
+    option.dataset.defaultUnit = p.defaultUnit || '本';
     select.appendChild(option);
   });
+
   const other = document.createElement('option');
   other.value = 'OTHER';
   other.textContent = 'その他（商品名を入力）';
   select.appendChild(other);
 
+  const setUnit = value => {
+    const preferred = String(value || '本').trim() || '本';
+    if (![...unit.options].some(x => x.value === preferred)) {
+      const option = document.createElement('option');
+      option.value = preferred;
+      option.textContent = preferred;
+      unit.appendChild(option);
+    }
+    unit.value = preferred;
+  };
+
   select.onchange = () => {
     const isOther = select.value === 'OTHER';
     otherField.classList.toggle('hidden', !isOther);
     otherInput.required = isOther;
-    if (!isOther) unit.value = select.options[select.selectedIndex]?.dataset.defaultUnit || '';
-  };
-  fragment.querySelector('.remove-item-button').onclick = () => {
-    if (document.querySelectorAll('.item-card').length <= 1) return alert('商品は1件以上必要です。');
-    card.remove();
-    renumber();
+    if (!isOther) setUnit(select.options[select.selectedIndex]?.dataset.defaultUnit || '本');
   };
 
-  byId('itemsContainer').appendChild(fragment);
+  fragment.querySelector('.remove-item-button').onclick = () => {
+    if (container.querySelectorAll('.item-card').length <= 1) return alert('商品は1件以上必要です。');
+    card.remove();
+    renumber(containerId);
+  };
+
+  container.appendChild(fragment);
+
   if (data) {
-    const match = resolveProductMatch(data);
-    if (match.product) {
-      select.value = match.product.productCode;
-      select.dispatchEvent(new Event('change'));
-      card.dataset.aiMatchStatus = match.status;
-      card.dataset.aiOriginalName = data.originalProductName || data.productName || '';
-      showAiProductMatchNotice(card, match);
-    } else {
-      select.value = 'OTHER';
-      select.dispatchEvent(new Event('change'));
+    const exists = [...select.options].some(x => x.value === data.productCode);
+    select.value = exists ? (data.productCode || '') : 'OTHER';
+    if (select.value === 'OTHER') {
+      otherField.classList.remove('hidden');
+      otherInput.required = true;
       otherInput.value = data.productName || '';
-      card.dataset.aiMatchStatus = 'unmatched';
-      card.dataset.aiOriginalName = data.originalProductName || data.productName || '';
-      showAiProductMatchNotice(card, match);
     }
-    unit.value = data.unit || select.options[select.selectedIndex]?.dataset.defaultUnit || '';
+    setUnit(data.unit || select.options[select.selectedIndex]?.dataset.defaultUnit || '本');
     card.querySelector('.quantity-input').value = data.quantity ?? '';
     card.querySelector('.item-note-input').value = data.note || '';
-  }
-  renumber();
-}
-
-
-function normalizeProductText(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFKC')
-    .replace(/[　\s\-ー・･()（）【】\[\]「」『』]/g, '')
-    .replace(/牛肉|豚肉|鶏肉/g, '');
-}
-
-function productSimilarity(a, b) {
-  const x = normalizeProductText(a);
-  const y = normalizeProductText(b);
-  if (!x || !y) return 0;
-  if (x === y) return 1;
-  if (x.includes(y) || y.includes(x)) {
-    return 0.82 + 0.15 * Math.min(x.length, y.length) / Math.max(x.length, y.length);
-  }
-  const bigrams = s => {
-    const set = new Set();
-    for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
-    if (s.length === 1) set.add(s);
-    return set;
-  };
-  const bx = bigrams(x);
-  const by = bigrams(y);
-  let common = 0;
-  bx.forEach(v => { if (by.has(v)) common++; });
-  return (2 * common) / Math.max(1, bx.size + by.size);
-}
-
-function resolveProductMatch(data) {
-  const code = String(data?.productCode || '');
-  const name = String(data?.originalProductName || data?.productName || '').trim();
-
-  if (code) {
-    const byCode = state.products.find(p => String(p.productCode) === code);
-    if (byCode) return { product: byCode, status: 'exact', score: 1, candidates: [byCode] };
-  }
-
-  const ranked = state.products.map(product => {
-    const names = [product.productName, product.displayName].filter(Boolean);
-    const score = Math.max(...names.map(n => productSimilarity(name, n)), 0);
-    return { product, score };
-  }).sort((a, b) => b.score - a.score);
-
-  const best = ranked[0];
-  const second = ranked[1];
-  if (!best || best.score < 0.58) {
-    return { product: null, status: 'unmatched', score: best?.score || 0, candidates: ranked.slice(0, 3).filter(x => x.score >= 0.3).map(x => x.product) };
-  }
-
-  const ambiguous = second && second.score >= 0.58 && (best.score - second.score) < 0.12;
-  if (ambiguous) {
-    return { product: null, status: 'ambiguous', score: best.score, candidates: ranked.slice(0, 3).map(x => x.product) };
-  }
-
-  return {
-    product: best.product,
-    status: best.score >= 0.92 ? 'exact' : 'fuzzy',
-    score: best.score,
-    candidates: ranked.slice(0, 3).map(x => x.product)
-  };
-}
-
-function showAiProductMatchNotice(card, match) {
-  const old = card.querySelector('.ai-product-match');
-  if (old) old.remove();
-
-  if (!match || match.status === 'exact') return;
-
-  const notice = document.createElement('div');
-  notice.className = `ai-product-match ai-match-${match.status}`;
-
-  if (match.status === 'fuzzy' && match.product) {
-    notice.innerHTML =
-      `<strong>AI商品照合：</strong>「${escapeHtml(card.dataset.aiOriginalName)}」を
-       「${escapeHtml(match.product.displayName || match.product.productName)}」として選択しました。
-       必ず確認してください。`;
   } else {
-    const candidates = (match.candidates || []).map(p =>
-      `<button type="button" class="ai-candidate-button" data-code="${escapeHtml(p.productCode)}">${escapeHtml(p.displayName || p.productName)}</button>`
-    ).join('');
-    notice.innerHTML =
-      `<strong>${match.status === 'ambiguous' ? '候補が複数あります。' : '商品マスターと一致しませんでした。'}</strong>
-       <span>元の表記：${escapeHtml(card.dataset.aiOriginalName || '不明')}</span>
-       ${candidates ? `<div class="ai-candidate-list">${candidates}</div>` : ''}`;
-
-    notice.querySelectorAll('.ai-candidate-button').forEach(button => {
-      button.onclick = () => {
-        const select = card.querySelector('.product-select');
-        select.value = button.dataset.code;
-        select.dispatchEvent(new Event('change'));
-        card.dataset.aiMatchStatus = 'confirmed';
-        notice.remove();
-      };
-    });
+    setUnit('本');
   }
 
-  const select = card.querySelector('.product-select');
-  select.closest('.item-card').querySelector('.item-heading').after(notice);
-}
-
-
-function rematchAiItems() {
-  [...document.querySelectorAll('.item-card')].forEach(card => {
-    const originalName = String(card.dataset.aiOriginalName || '').trim();
-    if (!originalName) return;
-    const select = card.querySelector('.product-select');
-    const otherInput = card.querySelector('.other-name-input');
-    const unit = card.querySelector('.unit-input');
-    const match = resolveProductMatch({
-      productName: originalName,
-      originalProductName: originalName
-    });
-
-    if (match.product) {
-      select.value = match.product.productCode;
-      select.dispatchEvent(new Event('change'));
-      card.dataset.aiMatchStatus = match.status;
-      if (!unit.value) unit.value = match.product.defaultUnit || 'kg';
-    } else {
-      select.value = 'OTHER';
-      select.dispatchEvent(new Event('change'));
-      otherInput.value = originalName;
-      card.dataset.aiMatchStatus = match.status || 'unmatched';
-    }
-    showAiProductMatchNotice(card, match);
-  });
+  renumber(containerId);
 }
 
 function updateDateMode() {
@@ -636,9 +266,6 @@ function collectOrder() {
 
   const items = [...document.querySelectorAll('.item-card')].map((card, i) => {
     const select = card.querySelector('.product-select');
-    if (card.dataset.aiMatchStatus === 'ambiguous' || card.dataset.aiMatchStatus === 'unmatched') {
-      throw new Error(`${i + 1}件目の商品を商品マスターから選択してください。`);
-    }
     const quantity = Number(card.querySelector('.quantity-input').value);
     const unit = card.querySelector('.unit-input').value.trim();
     if (!select.value) throw new Error(`${i + 1}件目の商品を選択してください。`);
@@ -696,8 +323,6 @@ function applyOrderToForm(order) {
   byId('itemsContainer').innerHTML = '';
   const items = Array.isArray(order.items) && order.items.length ? order.items : [null];
   items.forEach(item => addItem(item));
-  // LIFF/Safariのキャッシュや初期化順に左右されないよう、AI商品をもう一度照合する
-  requestAnimationFrame(() => rematchAiItems());
   byId('deliveryDate').value = order.deliveryDate || '';
   byId('deliveryCondition').value = order.deliveryCondition || '';
   byId('preferredTime').value = order.preferredTime || '';
@@ -711,150 +336,34 @@ function applyOrderToForm(order) {
   state.pendingOrder = { reorderSourceId: order.reorderSourceId || '' };
 }
 
-
-function collectFavoriteItems() {
-  return [...document.querySelectorAll('.item-card')].map((card, i) => {
-    const select = card.querySelector('.product-select');
-    const quantity = Number(card.querySelector('.quantity-input').value);
-    const unit = card.querySelector('.unit-input').value.trim();
-    if (!select.value) throw new Error(`${i + 1}件目の商品を選択してください。`);
-    const isOther = select.value === 'OTHER';
-    const productName = isOther
-      ? card.querySelector('.other-name-input').value.trim()
-      : (select.options[select.selectedIndex].dataset.productName || select.options[select.selectedIndex].textContent);
-    if (!productName) throw new Error(`${i + 1}件目の商品名を入力してください。`);
-    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`${i + 1}件目の数量を正しく入力してください。`);
-    if (!unit) throw new Error(`${i + 1}件目の単位を入力してください。`);
-    return { productCode: select.value, productName, quantity, unit, note: card.querySelector('.item-note-input').value.trim(), isOther };
-  });
-}
-
-async function saveCurrentItemsAsFavorite() {
-  try {
-    const items = collectFavoriteItems();
-    const setName = prompt('お気に入りセット名を入力してください。（最大30文字）');
-    if (setName === null) return;
-    const result = await postAction('saveFavorite', { payload: JSON.stringify({ setName: setName.trim(), items }) });
-    if (!result.ok) throw new Error(result.error || 'お気に入りセットを保存できませんでした。');
-    state.favorites.unshift(result.favorite);
-    state.favorites = state.favorites.filter((x, i, a) => x && a.findIndex(y => y.favoriteId === x.favoriteId) === i);
-    renderFavorites();
-    alert('お気に入りセットを保存しました。');
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-function renderFavorites() {
-  const list = byId('favoriteList');
-  if (!list) return;
-  list.innerHTML = '';
-  if (!state.favorites.length) {
-    list.innerHTML = '<div class="center-card compact"><p>お気に入りセットはまだありません。<br>発注画面で商品と数量を入力し、「現在の商品をお気に入りセットに保存」を押してください。</p></div>';
-    return;
-  }
-  state.favorites.forEach(favorite => {
-    const card = document.createElement('article');
-    card.className = 'favorite-card';
-    card.innerHTML = `<h3>${escapeHtml(favorite.setName)}</h3>
-      <div class="favorite-meta">更新：${escapeHtml(favorite.updatedByName || favorite.createdByName || '')} ${escapeHtml(favorite.updatedAt || favorite.createdAt || '')}</div>
-      <ul class="favorite-items">${(favorite.items || []).map(x => `<li>${escapeHtml(x.productName)}　${escapeHtml(x.quantity)} ${escapeHtml(x.unit)}</li>`).join('')}</ul>
-      <div class="favorite-actions favorite-primary-actions">
-        <button class="button button-primary apply" type="button">発注に反映</button>
-        <button class="button button-secondary overwrite" type="button">現在の商品で上書き</button>
-      </div>
-      <div class="favorite-actions favorite-manage-actions">
-        <button class="button button-secondary rename" type="button">名前変更</button>
-        <button class="button button-secondary move-up" type="button" ${state.favorites.indexOf(favorite) === 0 ? 'disabled' : ''}>↑ 上へ</button>
-        <button class="button button-secondary move-down" type="button" ${state.favorites.indexOf(favorite) === state.favorites.length - 1 ? 'disabled' : ''}>↓ 下へ</button>
-        <button class="button button-danger delete" type="button">削除</button>
-      </div>`;
-    card.querySelector('.apply').onclick = () => applyFavorite(favorite);
-    card.querySelector('.overwrite').onclick = () => overwriteFavorite(favorite);
-    card.querySelector('.rename').onclick = () => renameFavorite(favorite);
-    card.querySelector('.move-up').onclick = () => moveFavorite(favorite, 'up');
-    card.querySelector('.move-down').onclick = () => moveFavorite(favorite, 'down');
-    card.querySelector('.delete').onclick = () => removeFavorite(favorite);
-    list.appendChild(card);
-  });
-}
-
-function applyFavorite(favorite) {
-  byId('itemsContainer').innerHTML = '';
-  (favorite.items || []).forEach(item => addItem(item));
-  if (!(favorite.items || []).length) addItem();
-  switchTab('new');
-  scrollTo(0, 0);
-  alert(`「${favorite.setName}」を発注画面に反映しました。希望日と受取方法を入力してください。`);
-}
-
-async function overwriteFavorite(favorite) {
-  try {
-    const items = collectFavoriteItems();
-    const setName = prompt('セット名を確認・変更してください。', favorite.setName);
-    if (setName === null) return;
-    if (!confirm(`「${setName.trim()}」を現在の商品内容で上書きしますか？`)) return;
-    const result = await postAction('saveFavorite', { payload: JSON.stringify({ favoriteId: favorite.favoriteId, setName: setName.trim(), items }) });
-    if (!result.ok) throw new Error(result.error || 'お気に入りセットを更新できませんでした。');
-    state.favorites = state.favorites.map(x => x.favoriteId === favorite.favoriteId ? result.favorite : x);
-    renderFavorites();
-    alert('お気に入りセットを更新しました。');
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-async function renameFavorite(favorite) {
-  const setName = prompt('新しいセット名を入力してください。（最大30文字）', favorite.setName);
-  if (setName === null || setName.trim() === favorite.setName) return;
-  try {
-    const result = await postAction('renameFavorite', { favoriteId: favorite.favoriteId, setName: setName.trim() });
-    if (!result.ok) throw new Error(result.error || 'セット名を変更できませんでした。');
-    state.favorites = state.favorites.map(x => x.favoriteId === favorite.favoriteId ? result.favorite : x);
-    renderFavorites();
-    alert('セット名を変更しました。');
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-async function moveFavorite(favorite, direction) {
-  try {
-    const result = await postAction('moveFavorite', { favoriteId: favorite.favoriteId, direction });
-    if (!result.ok) throw new Error(result.error || '並び順を変更できませんでした。');
-    state.favorites = result.favorites || state.favorites;
-    renderFavorites();
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
-async function removeFavorite(favorite) {
-  if (!confirm(`「${favorite.setName}」を削除しますか？`)) return;
-  try {
-    const result = await postAction('deleteFavorite', { favoriteId: favorite.favoriteId });
-    if (!result.ok) throw new Error(result.error || 'お気に入りセットを削除できませんでした。');
-    state.favorites = state.favorites.filter(x => x.favoriteId !== favorite.favoriteId);
-    renderFavorites();
-  } catch (err) {
-    alert(err.message || String(err));
-  }
-}
-
 async function saveDraft() {
   const button = byId('saveDraftButton');
+  const status = byId('draftSaveStatus');
   button.disabled = true;
-  button.textContent = '保存中…';
+  button.textContent = '保存しています…';
+  status.textContent = '下書きを保存しています。少々お待ちください。';
+
   try {
-    const result = await postAction('saveDraft', { payload: JSON.stringify(collectDraft()) });
+    const payload = collectDraft();
+    const result = await postAction('saveDraft', { payload: JSON.stringify(payload) });
     if (!result.ok) throw new Error(result.error || '下書きを保存できませんでした。');
-    byId('draftNoticeText').textContent = `${result.savedAt || '現在'} に下書きを保存しました。`;
+
+    const savedAt = result.savedAt || '現在';
+    byId('draftNoticeText').textContent = `✓ ${savedAt} に下書きを保存しました。`;
     byId('draftNotice').classList.remove('hidden');
+    status.textContent = `✓ 保存完了（${savedAt}）`;
+    button.textContent = '✓ 保存しました';
+
+    setTimeout(() => {
+      button.textContent = '下書き保存';
+      status.textContent = '';
+    }, 1800);
   } catch (err) {
+    status.textContent = `保存できませんでした：${err.message || String(err)}`;
     alert(err.message || String(err));
+    button.textContent = '下書き保存';
   } finally {
     button.disabled = false;
-    button.textContent = '下書き保存';
   }
 }
 
@@ -958,9 +467,165 @@ function copyHistoryToForm(order, editable) {
   alert(editable ? '過去の内容を入力しました。必要な箇所を修正してください。' : '過去の内容を入力しました。希望日を指定して発注してください。');
 }
 
+
+function collectItemsFromContainer(containerId) {
+  return [...byId(containerId).querySelectorAll('.item-card')].map((card, i) => {
+    const select = card.querySelector('.product-select');
+    const quantity = Number(card.querySelector('.quantity-input').value);
+    const unit = card.querySelector('.unit-input').value.trim();
+    if (!select.value) throw new Error(`${i + 1}件目の商品を選択してください。`);
+    const isOther = select.value === 'OTHER';
+    const productName = isOther
+      ? card.querySelector('.other-name-input').value.trim()
+      : (select.options[select.selectedIndex]?.dataset.productName || select.options[select.selectedIndex]?.textContent || '');
+    if (!productName) throw new Error(`${i + 1}件目の商品名を入力してください。`);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`${i + 1}件目の数量を正しく入力してください。`);
+    if (!unit) throw new Error(`${i + 1}件目の単位を選択してください。`);
+    return {
+      productCode: select.value,
+      productName,
+      quantity,
+      unit,
+      note: card.querySelector('.item-note-input').value.trim(),
+      isOther
+    };
+  });
+}
+
+function collectCurrentItemsForFavorite() {
+  try {
+    return collectItemsFromContainer('itemsContainer');
+  } catch (_) {
+    return [];
+  }
+}
+
+function openFavoriteEditor(favorite = null, presetItems = null) {
+  if (!favorite && state.favorites.length >= 10) {
+    alert('お気に入りセットは最大10セットまでです。既存セットを修正または削除してください。');
+    return;
+  }
+
+  byId('favoriteEditingId').value = favorite?.favoriteId || '';
+  byId('favoriteSetName').value = favorite?.setName || '';
+  byId('favoriteEditorTitle').textContent = favorite ? 'お気に入りセットを修正' : 'お気に入りセットを追加';
+  byId('favoriteSaveStatus').textContent = '';
+  byId('favoriteEditorItems').innerHTML = '';
+
+  const items = favorite?.items?.length
+    ? favorite.items
+    : (Array.isArray(presetItems) && presetItems.length ? presetItems : [null]);
+
+  items.forEach(item => addItem(item, 'favoriteEditorItems'));
+  byId('favoriteEditor').classList.remove('hidden');
+  switchTab('favorite');
+  byId('favoriteEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeFavoriteEditor() {
+  byId('favoriteEditor').classList.add('hidden');
+  byId('favoriteEditingId').value = '';
+  byId('favoriteSetName').value = '';
+  byId('favoriteEditorItems').innerHTML = '';
+  byId('favoriteSaveStatus').textContent = '';
+}
+
+async function saveFavoriteFromEditor() {
+  const button = byId('saveFavoriteEditorButton');
+  const status = byId('favoriteSaveStatus');
+
+  try {
+    const favoriteId = byId('favoriteEditingId').value.trim();
+    const setName = byId('favoriteSetName').value.trim();
+    if (!setName) throw new Error('セット名を入力してください。');
+
+    const items = collectItemsFromContainer('favoriteEditorItems');
+    button.disabled = true;
+    button.textContent = '保存しています…';
+    status.textContent = 'お気に入りセットを保存しています。';
+
+    const result = await postAction('saveFavorite', {
+      payload: JSON.stringify({ favoriteId, setName, items })
+    });
+    if (!result.ok) throw new Error(result.error || 'お気に入りセットを保存できませんでした。');
+
+    const saved = result.favorite;
+    const index = state.favorites.findIndex(x => x.favoriteId === saved.favoriteId);
+    if (index >= 0) state.favorites[index] = saved;
+    else state.favorites.push(saved);
+
+    state.favorites.sort((a, b) => Number(a.displayOrder || 9999) - Number(b.displayOrder || 9999));
+    status.textContent = '✓ 保存しました。';
+    renderFavorites();
+    setTimeout(closeFavoriteEditor, 700);
+  } catch (err) {
+    status.textContent = `保存できませんでした：${err.message || String(err)}`;
+    alert(err.message || String(err));
+  } finally {
+    button.disabled = false;
+    button.textContent = 'このセットを保存';
+  }
+}
+
+function renderFavorites() {
+  const list = byId('favoriteList');
+  list.innerHTML = '';
+
+  if (!state.favorites.length) {
+    list.innerHTML = '<section class="card"><p>お気に入りセットはまだありません。「新しいセット」から登録できます。</p></section>';
+    return;
+  }
+
+  state.favorites.forEach((favorite, index) => {
+    const card = document.createElement('section');
+    card.className = 'card favorite-card';
+    card.innerHTML = `
+      <div class="section-heading">
+        <h3>${escapeHtml(favorite.setName)}</h3>
+        <small>${index + 1} / ${state.favorites.length}</small>
+      </div>
+      <ul class="history-items">
+        ${(favorite.items || []).map(x => `<li>${escapeHtml(x.productName)}　${escapeHtml(x.quantity)} ${escapeHtml(x.unit || '本')}</li>`).join('')}
+      </ul>
+      <div class="history-actions">
+        <button class="button button-primary use" type="button">発注に使う</button>
+        <button class="button button-secondary edit-favorite" type="button">内容を修正</button>
+        <button class="button button-secondary move-up" type="button" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button class="button button-secondary move-down" type="button" ${index === state.favorites.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="button button-secondary delete-favorite" type="button">削除</button>
+      </div>`;
+
+    card.querySelector('.use').onclick = () => {
+      applyOrderToForm({ items: favorite.items || [], dateMode: 'date' });
+      switchTab('new');
+      scrollTo(0, 0);
+      alert(`「${favorite.setName}」を発注画面に入力しました。希望日と受取方法を確認してください。`);
+    };
+    card.querySelector('.edit-favorite').onclick = () => openFavoriteEditor(favorite);
+    card.querySelector('.move-up').onclick = () => moveFavorite(favorite.favoriteId, 'up');
+    card.querySelector('.move-down').onclick = () => moveFavorite(favorite.favoriteId, 'down');
+    card.querySelector('.delete-favorite').onclick = () => deleteFavoriteSet(favorite);
+    list.appendChild(card);
+  });
+}
+
+async function moveFavorite(favoriteId, direction) {
+  const result = await postAction('moveFavorite', { favoriteId, direction });
+  if (!result.ok) return alert(result.error || '並び替えできませんでした。');
+  state.favorites = Array.isArray(result.favorites) ? result.favorites : state.favorites;
+  renderFavorites();
+}
+
+async function deleteFavoriteSet(favorite) {
+  if (!confirm(`「${favorite.setName}」を削除しますか？`)) return;
+  const result = await postAction('deleteFavorite', { favoriteId: favorite.favoriteId });
+  if (!result.ok) return alert(result.error || '削除できませんでした。');
+  state.favorites = state.favorites.filter(x => x.favoriteId !== favorite.favoriteId);
+  closeFavoriteEditor();
+  renderFavorites();
+}
+
 function submitOrder() {
-  if (!state.pendingOrder) return;
-  if (!confirm('表示されている内容で発注を確定します。商品・数量・単位・希望日を確認しましたか？')) return;
   const button = byId('submitButton');
   button.disabled = true;
   button.textContent = '送信しています…';
@@ -973,12 +638,12 @@ function submitOrder() {
   }, 30000);
 }
 
-function postAction(action, extra = {}, timeoutMs = 30000) {
+function postAction(action, extra = {}) {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       window.removeEventListener('message', handler);
       reject(new Error('Apps Scriptとの通信がタイムアウトしました。'));
-    }, timeoutMs);
+    }, 30000);
     function handler(e) {
       if (!e.data || e.data.source !== 'MeatFlowAppsScript' || e.data.action !== action) return;
       clearTimeout(timeoutId);
@@ -1053,7 +718,11 @@ function showOnly(id) {
     .forEach(x => byId(x).classList.toggle('hidden', x !== id));
 }
 function byId(id) { return document.getElementById(id); }
-function renumber() { document.querySelectorAll('.item-card').forEach((x, i) => x.querySelector('.item-number').textContent = `商品 ${i + 1}`); }
+function renumber(containerId = 'itemsContainer') {
+  byId(containerId).querySelectorAll('.item-card').forEach((x, i) => {
+    x.querySelector('.item-number').textContent = `商品 ${i + 1}`;
+  });
+}
 function row(label, value) { return `<div class="summary-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`; }
 function escapeHtml(value) { return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;'); }
 function timeout(promise, ms, message) { return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))]); }

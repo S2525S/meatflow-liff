@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#1e1e1e">
   <title>MeatLink LINE発注</title>
-  <link rel="stylesheet" href="./styles.css?v=2.3.0">
+  <link rel="stylesheet" href="./styles.css?v=2.4.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="./config.js"></script>
 </head>
@@ -125,6 +125,7 @@
 
         <div class="draft-action-row">
           <button id="saveDraftButton" class="button button-secondary" type="button">下書き保存</button>
+          <p id="draftSaveStatus" class="small-note" role="status" aria-live="polite"></p>
         </div>
         <div class="fixed-order-actions">
           <button id="bottomAddItemButton" class="button button-secondary" type="button">＋追加</button>
@@ -178,9 +179,32 @@
 
     <section id="favoritePanel" class="hidden">
       <section class="card">
-        <h2>お気に入りセット</h2>
-        <p class="small-note">得意先内の有効なスタッフ全員で共有されます。最大5件まで登録できます。</p>
+        <div class="section-heading">
+          <h2>お気に入りセット</h2>
+          <button id="newFavoriteButton" class="button button-primary button-compact" type="button">＋ 新しいセット</button>
+        </div>
+        <p class="small-note">得意先内の有効なスタッフ全員で共有されます。最大10セットまで登録できます。</p>
       </section>
+
+      <section id="favoriteEditor" class="card hidden">
+        <h2 id="favoriteEditorTitle">お気に入りセットを追加</h2>
+        <input id="favoriteEditingId" type="hidden">
+        <label class="field">
+          <span>セット名 <em>必須</em></span>
+          <input id="favoriteSetName" type="text" maxlength="30" placeholder="例：いつもの焼肉セット">
+        </label>
+        <div class="section-heading">
+          <h3>商品内容</h3>
+          <button id="addFavoriteItemButton" class="button button-secondary button-compact" type="button">＋ 商品追加</button>
+        </div>
+        <div id="favoriteEditorItems"></div>
+        <div class="sticky-actions two-buttons">
+          <button id="cancelFavoriteEditButton" class="button button-secondary" type="button">キャンセル</button>
+          <button id="saveFavoriteEditorButton" class="button button-primary" type="button">このセットを保存</button>
+        </div>
+        <p id="favoriteSaveStatus" class="small-note" role="status" aria-live="polite"></p>
+      </section>
+
       <div id="favoriteList"></div>
     </section>
 
@@ -230,7 +254,19 @@
     </label>
     <div class="field-grid">
       <label class="field"><span>数量 <em>必須</em></span><input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
-      <label class="field"><span>単位 <em>必須</em></span><input class="unit-input" type="text" placeholder="kg" required></label>
+      <label class="field"><span>単位 <em>必須</em></span>
+        <select class="unit-input" required>
+          <option value="本" selected>本</option>
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="枚">枚</option>
+          <option value="個">個</option>
+          <option value="パック">パック</option>
+          <option value="ケース">ケース</option>
+          <option value="箱">箱</option>
+          <option value="袋">袋</option>
+        </select>
+      </label>
     </div>
     <label class="field"><span>商品備考</span><input class="item-note-input" type="text" placeholder="厚切り、スライスなど"></label>
   </article>
@@ -240,6 +276,6 @@
         name="submitFrame"
         class="hidden">
 </iframe>
-<script src="./app.js?v=2.3.0"></script>
+<script src="./app.js?v=2.4.0"></script>
 </body>
 </html>

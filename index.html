@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#1e1e1e">
-  <title>MeatFlow LINE受注</title>
-  <link rel="stylesheet" href="./styles.css?v=1.0.0">
+  <title>MeatLink LINE発注</title>
+  <link rel="stylesheet" href="./styles.css?v=2.3.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="./config.js"></script>
 </head>
@@ -23,7 +23,7 @@
   </section>
 
   <section id="registrationView" class="center-card hidden">
-    <p class="eyebrow">🐂 MeatFlow</p>
+    <p class="eyebrow">🐂 MeatLink</p>
     <h1>店舗アカウント登録</h1>
     <p class="small-note">管理者から案内された情報を入力してください。</p>
     <form id="registrationForm">
@@ -36,7 +36,7 @@
   </section>
 
   <section id="pendingView" class="center-card hidden">
-    <p class="eyebrow">🐂 MeatFlow</p>
+    <p class="eyebrow">🐂 MeatLink</p>
     <h1>承認待ちです</h1>
     <p>管理者の承認後に発注できます。</p>
     <button id="pendingRetryButton" class="button button-primary">承認状況を再確認</button>
@@ -45,7 +45,7 @@
   <section id="mainView" class="hidden">
     <header class="app-header">
       <div class="brand-heading">
-        <p class="eyebrow">🐂 MeatFlow</p>
+        <p class="eyebrow">🐂 MeatLink</p>
         <h1 id="screenTitle">
           <span class="company-title">株式会社髙那（担たん亭）</span>
           <span class="system-title">発注システム</span>
@@ -200,7 +200,7 @@
   </section>
 
   <section id="confirmView" class="hidden">
-    <header class="app-header"><div><p class="eyebrow">🐂 MeatFlow</p><h1>注文内容の確認</h1><p class="confirm-warning">内容を確認し、必要な場合は「内容を修正する」で戻ってください。</p></div></header>
+    <header class="app-header"><div><p class="eyebrow">🐂 MeatLink</p><h1>注文内容の確認</h1><p class="confirm-warning">内容を確認し、必要な場合は「内容を修正する」で戻ってください。</p></div></header>
     <div id="confirmationContent"></div>
     <div class="sticky-actions two-buttons">
       <button id="editButton" class="button button-secondary button-large" type="button">内容を修正する</button>
@@ -237,6 +237,6 @@
 </template>
 
 <iframe id="submitFrame" name="submitFrame" class="hidden"></iframe>
-<script src="./app.js?v=1.0.0"></script>
+<script src="./app.js?v=2.3.0"></script>
 </body>
 </html>

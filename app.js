@@ -97,8 +97,16 @@ async function initializeApp() {
       byId('draftNoticeText').textContent = `${data.draft.savedAt} に保存した下書きを復元しました。`;
       byId('draftNotice').classList.remove('hidden');
     }
+    const externalAiApplied = consumeExternalAiOrder();
+
     showOnly('mainView');
     switchTab('new');
+
+    if (externalAiApplied) {
+      setTimeout(() => {
+        alert('MeatLink AIの解析結果を発注画面へ反映しました。商品・数量・単位・希望日・受取方法を必ず確認してください。');
+      }, 300);
+    }
   } catch (e) {
     byId('errorMessage').textContent = e.message || String(e);
     showOnly('errorView');
@@ -150,6 +158,46 @@ function switchTab(tab) {
   if (isHistory && state.historyPage === 0 && !state.historyLoading) loadHistory(true);
 }
 
+
+function consumeExternalAiOrder() {
+  const url = new URL(location.href);
+  const encoded = url.searchParams.get('aiOrder');
+  if (!encoded) return false;
+
+  try {
+    const padded = encoded.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((encoded.length + 3) % 4);
+    const jsonText = decodeURIComponent(escape(atob(padded)));
+    const source = JSON.parse(jsonText);
+
+    const mapped = {
+      deliveryDate: String(source.deliveryDate || ''),
+      deliveryCondition: String(source.deliveryCondition || ''),
+      dateMode: source.deliveryDate && source.deliveryCondition
+        ? 'both'
+        : source.deliveryCondition ? 'text' : 'date',
+      receiveMethod: String(source.receiveMethod || ''),
+      preferredTime: String(source.preferredTime || ''),
+      orderNote: String(source.orderNote || source.note || 'MeatLink AIから取り込み'),
+      items: (Array.isArray(source.items) ? source.items : []).map(item => ({
+        productCode: String(item.productCode || item.code || ''),
+        productName: String(item.productName || item.name || ''),
+        originalProductName: String(item.originalProductName || item.productName || item.name || ''),
+        quantity: Number(item.quantity ?? item.qty ?? 0),
+        unit: String(item.unit || ''),
+        note: String(item.note || '')
+      }))
+    };
+
+    applyOrderToForm(mapped);
+    url.searchParams.delete('aiOrder');
+    history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
+    return true;
+  } catch (err) {
+    console.error('MeatLink AI data import failed:', err);
+    alert('MeatLink AIの注文データを読み込めませんでした。AI画面からもう一度送信してください。');
+    return false;
+  }
+}
 
 function setAiMode(mode) {
   const isText = mode === 'text';

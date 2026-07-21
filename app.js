@@ -1,4 +1,4 @@
-// MeatFlow v0.9 安定版：下書き削除後の画面完全初期化対応
+// MeatFlow v1.0 安定版：下書き削除後の画面完全初期化対応
 'use strict';
 
 const CONFIG = window.MEATFLOW_CONFIG || {};

@@ -1,4 +1,4 @@
-// MeatFlow v1.0 安定版：下書き削除後の画面完全初期化対応
+// MeatFlow v2.0 互換版：商品登録確定フローはApps Script管理画面で対応
 'use strict';
 
 const CONFIG = window.MEATFLOW_CONFIG || {};

@@ -1,4 +1,4 @@
-// MeatFlow v2.1 互換版：商品登録確定フローはApps Script管理画面で対応
+// MeatFlow v3.0 互換版：商品登録確定フローはApps Script管理画面で対応
 'use strict';
 
 const CONFIG = window.MEATFLOW_CONFIG || {};

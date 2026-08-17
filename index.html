@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#1e1e1e">
   <title>MeatFlow LINE発注</title>
-  <link rel="stylesheet" href="./styles.css?v=4.9.0">
+  <link rel="stylesheet" href="./styles.css?v=4.9.1">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="./config.js"></script>
 </head>
@@ -83,35 +83,39 @@
           <button id="saveAsFavoriteButton" type="button" class="button button-secondary button-large">⭐ この内容を「いつもの注文」に保存</button>
         </section>
 
-        <section class="card step-card">
+        <section class="card step-card compact-order-card">
           <div class="step-title"><span class="step-number">2</span><h2>納品希望日</h2></div>
-          <div class="quick-date-grid">
+          <div class="quick-date-grid four-dates">
             <button class="quick-date-button" data-offset="0" type="button">今日</button>
             <button class="quick-date-button" data-offset="1" type="button">明日</button>
             <button class="quick-date-button" data-offset="2" type="button">明後日</button>
+            <button id="otherDateButton" class="quick-date-button" type="button">その他</button>
           </div>
 
-          <div class="date-mode compact-date-mode">
-            <label><input type="radio" name="dateMode" value="date" checked> 日付で指定</label>
-            <label><input type="radio" name="dateMode" value="text"> その他の希望</label>
-            <label><input type="radio" name="dateMode" value="both"> 日付＋希望</label>
-          </div>
-
-          <label id="deliveryDateField" class="field">
-            <span>📅 日付を選ぶ</span>
+          <label id="deliveryDateField" class="field compact-date-field">
+            <span>📅 日付</span>
             <input id="deliveryDate" type="date">
           </label>
-          <label id="deliveryConditionField" class="field hidden">
-            <span>その他の希望</span>
-            <input id="deliveryCondition" type="text" placeholder="例：最短希望、○日までに希望">
-          </label>
+
+          <button id="additionalRequestToggle" class="sub-option-toggle" type="button">＋ 納品日の希望を追加</button>
+          <div id="additionalRequestPanel" class="additional-request-panel hidden">
+            <div class="date-mode compact-date-mode">
+              <label><input type="radio" name="dateMode" value="date" checked> 日付のみ</label>
+              <label><input type="radio" name="dateMode" value="text"> 希望のみ</label>
+              <label><input type="radio" name="dateMode" value="both"> 日付＋希望</label>
+            </div>
+            <label id="deliveryConditionField" class="field hidden">
+              <span>その他の希望</span>
+              <input id="deliveryCondition" type="text" placeholder="例：最短希望、○日までに希望">
+            </label>
+          </div>
         </section>
 
-        <section class="card optional-card">
-          <h2>受取方法・時間</h2>
-          <div id="receiveMethodArea" class="radio-list"></div>
-          <label class="field">
-            <span>希望時間帯</span>
+        <section class="card optional-card compact-order-card">
+          <h2>受取方法</h2>
+          <div id="receiveMethodArea" class="radio-list receive-method-grid"></div>
+          <label class="field compact-time-field">
+            <span>希望時間 <small>任意</small></span>
             <select id="preferredTime">
               <option value="">指定なし</option>
               <option value="午前中">午前中</option>
@@ -123,10 +127,12 @@
           </label>
         </section>
 
-        <section class="card optional-card">
-          <h2>備考 <span class="optional-label">任意</span></h2>
-          <textarea id="orderNote" rows="3" placeholder="加工・配送などのご要望がある場合のみ入力"></textarea>
-        </section>
+        <details class="card optional-card compact-details">
+          <summary>備考・細かい希望 <span>任意</span></summary>
+          <div class="details-body">
+            <textarea id="orderNote" rows="2" placeholder="加工・配送などのご要望がある場合のみ入力"></textarea>
+          </div>
+        </details>
 
         <div class="draft-action-row">
           <button id="saveDraftButton" class="button button-secondary" type="button">下書き保存</button>
@@ -219,12 +225,10 @@
     </div>
 
     <label class="field product-search-field">
-      <span>🔍 商品名を検索</span>
-      <input class="product-search-input" type="search" placeholder="例：牛タン、サーロイン">
+      <input class="product-search-input" type="search" placeholder="🔍 商品名を検索（牛タン・サーロイン等）">
     </label>
 
-    <label class="field"><span>商品 <em>必須</em></span>
-      <select class="product-select" required><option value="">商品を選択してください</option></select>
+    <label class="field product-select-field"><select class="product-select" required><option value="">商品を選択してください</option></select>
     </label>
 
     <label class="field other-name-field hidden"><span>その他の商品名 <em>必須</em></span>
@@ -234,14 +238,14 @@
 
     <div class="quantity-unit-grid">
       <div class="field">
-        <span>数量 <em>必須</em></span>
+        <span>数量</span>
         <div class="quantity-stepper">
           <button class="quantity-minus" type="button" aria-label="数量を減らす">−</button>
           <input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required>
           <button class="quantity-plus" type="button" aria-label="数量を増やす">＋</button>
         </div>
       </div>
-      <label class="field"><span>単位 <em>必須</em></span>
+      <label class="field"><span>単位</span>
         <select class="unit-input" required>
           <option value="本" selected>本</option>
           <option value="kg">kg</option>
@@ -260,6 +264,6 @@
 </template>
 
 <iframe id="submitFrame" name="submitFrame" class="hidden"></iframe>
-<script src="./app.js?v=4.9.0"></script>
+<script src="./app.js?v=4.9.1"></script>
 </body>
 </html>

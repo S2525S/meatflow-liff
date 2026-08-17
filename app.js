@@ -34,9 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('historyTab').onclick = () => switchTab('history');
   byId('completeHistoryButton').onclick = () => { showOnly('mainView'); switchTab('history'); window.scrollTo(0, 0); };
   byId('completeReorderButton').onclick = reorderLastSubmitted;
-  document.querySelectorAll('.quick-date-button').forEach(button => {
+  document.querySelectorAll('.quick-date-button[data-offset]').forEach(button => {
     button.onclick = () => setQuickDate(Number(button.dataset.offset || 0), button);
   });
+  byId('otherDateButton').onclick = openOtherDate;
+  byId('additionalRequestToggle').onclick = toggleAdditionalRequest;
   byId('historySearchButton').onclick = () => loadHistory(true);
   byId('historyKeyword').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); loadHistory(true); } };
   byId('loadMoreHistoryButton').onclick = () => loadHistory(false);
@@ -211,6 +213,8 @@ function resetOrderForm() {
   byId('orderNote').value = '';
   document.querySelector('input[name="dateMode"][value="date"]').checked = true;
   updateDateMode();
+  byId('additionalRequestPanel').classList.add('hidden');
+  byId('additionalRequestToggle').textContent = '＋ 納品日の希望を追加';
   state.pendingOrder = null;
 }
 
@@ -409,6 +413,13 @@ function applyOrderToForm(order) {
   const dateMode = document.querySelector(`input[name="dateMode"][value="${mode}"]`);
   if (dateMode) dateMode.checked = true;
   updateDateMode();
+  if (order.deliveryCondition) {
+    byId('additionalRequestPanel').classList.remove('hidden');
+    byId('additionalRequestToggle').textContent = '− 納品日の希望を閉じる';
+  } else {
+    byId('additionalRequestPanel').classList.add('hidden');
+    byId('additionalRequestToggle').textContent = '＋ 納品日の希望を追加';
+  }
   const receive = [...document.querySelectorAll('input[name="receiveMethod"]')].find(x => x.value === order.receiveMethod);
   if (receive) receive.checked = true;
   state.pendingOrder = { reorderSourceId: order.reorderSourceId || '' };
@@ -736,6 +747,22 @@ async function deleteFavoriteSet(favorite) {
   renderFavorites();
 }
 
+
+
+function openOtherDate() {
+  const input = byId('deliveryDate');
+  document.querySelectorAll('.quick-date-button').forEach(x => x.classList.toggle('selected', x.id === 'otherDateButton'));
+  input.focus();
+  try { input.showPicker?.(); } catch (_) {}
+}
+
+function toggleAdditionalRequest() {
+  const panel = byId('additionalRequestPanel');
+  const button = byId('additionalRequestToggle');
+  const opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !opening);
+  button.textContent = opening ? '− 納品日の希望を閉じる' : '＋ 納品日の希望を追加';
+}
 
 function setQuickDate(offset, button) {
   const now = new Date();

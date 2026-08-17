@@ -1,4 +1,4 @@
-// MeatFlow v3.0 互換版：商品登録確定フローはApps Script管理画面で対応
+// MeatFlow LINE発注 v4.9 簡単発注UI 全張替版：既存API互換・スマホ操作簡略化
 'use strict';
 
 const CONFIG = window.MEATFLOW_CONFIG || {};
@@ -24,14 +24,19 @@ document.addEventListener('DOMContentLoaded', () => {
   byId('pendingRetryButton').onclick = initializeApp;
   byId('registrationForm').onsubmit = registerMember;
   byId('addItemButton').onclick = () => addItem();
+  byId('bottomAddItemButton').onclick = () => addItem();
   byId('orderForm').onsubmit = showConfirmation;
   byId('editButton').onclick = () => showOnly('mainView');
   byId('submitButton').onclick = submitOrder;
   byId('closeButton').onclick = () => liff.isInClient() ? liff.closeWindow() : location.reload();
   byId('newOrderTab').onclick = () => switchTab('new');
-  byId('aiOrderTab').onclick = () => switchTab('ai');
   byId('favoriteTab').onclick = () => switchTab('favorite');
   byId('historyTab').onclick = () => switchTab('history');
+  byId('completeHistoryButton').onclick = () => { showOnly('mainView'); switchTab('history'); window.scrollTo(0, 0); };
+  byId('completeReorderButton').onclick = reorderLastSubmitted;
+  document.querySelectorAll('.quick-date-button').forEach(button => {
+    button.onclick = () => setQuickDate(Number(button.dataset.offset || 0), button);
+  });
   byId('historySearchButton').onclick = () => loadHistory(true);
   byId('historyKeyword').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); loadHistory(true); } };
   byId('loadMoreHistoryButton').onclick = () => loadHistory(false);
@@ -154,13 +159,11 @@ async function registerMember(e) {
 function switchTab(tab) {
   const panels = {
     new: 'newOrderPanel',
-    ai: 'aiOrderPanel',
     favorite: 'favoritePanel',
     history: 'historyPanel'
   };
   const tabs = {
     new: 'newOrderTab',
-    ai: 'aiOrderTab',
     favorite: 'favoriteTab',
     history: 'historyTab'
   };
@@ -169,9 +172,8 @@ function switchTab(tab) {
   Object.entries(tabs).forEach(([key, id]) => byId(id).classList.toggle('active', key === tab));
 
   const titles = {
-    new: '新規発注',
-    ai: 'AI受注',
-    favorite: 'お気に入り',
+    new: '発注する',
+    favorite: 'いつもの注文',
     history: '注文履歴'
   };
   byId('screenTitle').textContent = titles[tab] || '発注システム';
@@ -219,6 +221,8 @@ function addItem(data = null, containerId = 'itemsContainer') {
   const unit = fragment.querySelector('.unit-input');
   const otherField = fragment.querySelector('.other-name-field');
   const otherInput = fragment.querySelector('.other-name-input');
+  const quantityInput = fragment.querySelector('.quantity-input');
+  const productSearch = fragment.querySelector('.product-search-input');
   const container = byId(containerId);
 
   state.products.forEach(p => {
@@ -234,6 +238,39 @@ function addItem(data = null, containerId = 'itemsContainer') {
   other.value = 'OTHER';
   other.textContent = 'その他（商品名を入力）';
   select.appendChild(other);
+
+  const allProductOptions = state.products.map(p => ({
+    productCode: p.productCode,
+    label: p.displayName || p.productName,
+    productName: p.productName,
+    defaultUnit: p.defaultUnit || '本'
+  }));
+
+  const rebuildProductOptions = keyword => {
+    const current = select.value;
+    const q = String(keyword || '').trim().toLowerCase();
+    const filtered = q
+      ? allProductOptions.filter(p => `${p.label} ${p.productName}`.toLowerCase().includes(q))
+      : allProductOptions;
+    select.innerHTML = '<option value="">商品を選択してください</option>';
+    filtered.forEach(p => {
+      const option = document.createElement('option');
+      option.value = p.productCode;
+      option.textContent = p.label;
+      option.dataset.productName = p.productName;
+      option.dataset.defaultUnit = p.defaultUnit;
+      select.appendChild(option);
+    });
+    const otherOption = document.createElement('option');
+    otherOption.value = 'OTHER';
+    otherOption.textContent = 'その他（商品名を入力）';
+    select.appendChild(otherOption);
+    if ([...select.options].some(x => x.value === current)) select.value = current;
+  };
+
+  if (productSearch) {
+    productSearch.oninput = () => rebuildProductOptions(productSearch.value);
+  }
 
   const setUnit = value => {
     const preferred = String(value || '本').trim() || '本';
@@ -253,6 +290,15 @@ function addItem(data = null, containerId = 'itemsContainer') {
     if (!isOther) setUnit(select.options[select.selectedIndex]?.dataset.defaultUnit || '本');
   };
 
+  const adjustQuantity = delta => {
+    const current = Number(quantityInput.value || 0);
+    const step = unit.value === 'kg' || unit.value === 'g' ? 0.1 : 1;
+    const next = Math.max(step, Math.round((current + delta * step) * 100) / 100);
+    quantityInput.value = next;
+  };
+  fragment.querySelector('.quantity-minus').onclick = () => adjustQuantity(-1);
+  fragment.querySelector('.quantity-plus').onclick = () => adjustQuantity(1);
+
   fragment.querySelector('.remove-item-button').onclick = () => {
     if (container.querySelectorAll('.item-card').length <= 1) return alert('商品は1件以上必要です。');
     card.remove();
@@ -270,10 +316,11 @@ function addItem(data = null, containerId = 'itemsContainer') {
       otherInput.value = data.productName || '';
     }
     setUnit(data.unit || select.options[select.selectedIndex]?.dataset.defaultUnit || '本');
-    card.querySelector('.quantity-input').value = data.quantity ?? '';
+    quantityInput.value = data.quantity ?? '';
     card.querySelector('.item-note-input').value = data.note || '';
   } else {
     setUnit('本');
+    quantityInput.value = 1;
   }
 
   renumber(containerId);
@@ -566,13 +613,13 @@ function collectCurrentItemsForFavorite() {
 
 function openFavoriteEditor(favorite = null, presetItems = null) {
   if (!favorite && state.favorites.length >= 10) {
-    alert('お気に入りセットは最大10セットまでです。既存セットを修正または削除してください。');
+    alert('いつもの注文は最大10セットまでです。既存セットを修正または削除してください。');
     return;
   }
 
   byId('favoriteEditingId').value = favorite?.favoriteId || '';
   byId('favoriteSetName').value = favorite?.setName || '';
-  byId('favoriteEditorTitle').textContent = favorite ? 'お気に入りセットを修正' : 'お気に入りセットを追加';
+  byId('favoriteEditorTitle').textContent = favorite ? 'いつもの注文を修正' : 'いつもの注文を追加';
   byId('favoriteSaveStatus').textContent = '';
   byId('favoriteEditorItems').innerHTML = '';
 
@@ -606,12 +653,12 @@ async function saveFavoriteFromEditor() {
     const items = collectItemsFromContainer('favoriteEditorItems');
     button.disabled = true;
     button.textContent = '保存しています…';
-    status.textContent = 'お気に入りセットを保存しています。';
+    status.textContent = 'いつもの注文を保存しています。';
 
     const result = await postAction('saveFavorite', {
       payload: JSON.stringify({ favoriteId, setName, items })
     });
-    if (!result.ok) throw new Error(result.error || 'お気に入りセットを保存できませんでした。');
+    if (!result.ok) throw new Error(result.error || 'いつもの注文を保存できませんでした。');
 
     const saved = result.favorite;
     const index = state.favorites.findIndex(x => x.favoriteId === saved.favoriteId);
@@ -636,7 +683,7 @@ function renderFavorites() {
   list.innerHTML = '';
 
   if (!state.favorites.length) {
-    list.innerHTML = '<section class="card"><p>お気に入りセットはまだありません。「新しいセット」から登録できます。</p></section>';
+    list.innerHTML = '<section class="card"><p>いつもの注文はまだありません。「＋追加」から登録できます。</p></section>';
     return;
   }
 
@@ -687,6 +734,36 @@ async function deleteFavoriteSet(favorite) {
   state.favorites = state.favorites.filter(x => x.favoriteId !== favorite.favoriteId);
   closeFavoriteEditor();
   renderFavorites();
+}
+
+
+function setQuickDate(offset, button) {
+  const now = new Date();
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const yyyy = local.getFullYear();
+  const mm = String(local.getMonth() + 1).padStart(2, '0');
+  const dd = String(local.getDate()).padStart(2, '0');
+  byId('deliveryDate').value = `${yyyy}-${mm}-${dd}`;
+  const dateMode = document.querySelector('input[name="dateMode"][value="date"]');
+  if (dateMode) dateMode.checked = true;
+  updateDateMode();
+  document.querySelectorAll('.quick-date-button').forEach(x => x.classList.toggle('selected', x === button));
+}
+
+function reorderLastSubmitted() {
+  if (!state.pendingOrder?.items?.length) {
+    showOnly('mainView');
+    switchTab('new');
+    return;
+  }
+  const previous = JSON.parse(JSON.stringify(state.pendingOrder));
+  previous.deliveryDate = '';
+  previous.deliveryCondition = '';
+  previous.dateMode = 'date';
+  applyOrderToForm(previous);
+  showOnly('mainView');
+  switchTab('new');
+  window.scrollTo(0, 0);
 }
 
 function submitOrder() {

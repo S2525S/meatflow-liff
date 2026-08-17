@@ -56,3 +56,47 @@ input[type="date"]{display:block;width:100%;min-width:0;-webkit-appearance:none}
   .page{padding-left:10px;padding-right:10px}.app-header{display:block}.customer-box{margin-top:8px}.three-tabs{gap:5px}.tab-button{font-size:.78rem}.simple-guide{display:block}.simple-guide span{display:block;margin-top:2px}
   .quantity-unit-grid{grid-template-columns:1.45fr .8fr}.compact-date-mode{grid-template-columns:1fr}.compact-date-mode label{justify-content:flex-start;padding-left:11px}.two-buttons{flex-direction:column-reverse}.history-actions{grid-template-columns:1fr}.summary-row{grid-template-columns:92px 1fr}
 }
+
+
+/* v4.9.1 さらに簡単版 */
+.compact-order-card{padding:14px 15px}
+.compact-order-card h2{margin-bottom:10px}
+.four-dates{grid-template-columns:repeat(4,1fr);margin-bottom:9px}
+.four-dates .quick-date-button{min-height:46px;padding:6px 3px;font-size:.9rem}
+.compact-date-field{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:8px;margin-bottom:8px}
+.compact-date-field>span{margin:0}
+.compact-date-field input{min-height:46px}
+.sub-option-toggle{width:100%;min-height:40px;border:0;background:transparent;color:#1677d2;text-align:left;font-weight:800;padding:5px 2px}
+.additional-request-panel{padding-top:7px;border-top:1px dashed var(--border)}
+.receive-method-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.receive-method-grid .radio-card{min-height:74px;padding:9px 10px;justify-content:flex-start}
+.receive-method-grid .radio-card small{font-size:.7rem;line-height:1.3;margin-top:2px}
+.compact-time-field{display:grid;grid-template-columns:100px 1fr;align-items:center;gap:8px;margin:0}
+.compact-time-field>span{margin:0}
+.compact-time-field select{min-height:46px}
+.compact-details{padding:0;overflow:hidden}
+.compact-details summary{cursor:pointer;list-style:none;padding:13px 15px;font-weight:850}
+.compact-details summary::-webkit-details-marker{display:none}
+.compact-details summary:after{content:'＋';float:right;color:var(--muted)}
+.compact-details[open] summary:after{content:'−'}
+.compact-details summary span{color:var(--muted);font-size:.75rem;font-weight:500}
+.details-body{padding:0 15px 14px}
+.product-search-field{margin-bottom:7px}
+.product-search-field input{min-height:44px}
+.product-select-field{margin-bottom:9px}
+.product-select-field select{min-height:46px}
+.item-card{padding:12px 13px}
+.item-heading{margin-bottom:7px}
+.quantity-unit-grid .field{margin-bottom:8px}
+.item-note-field{margin-top:2px}
+.item-note-field input{min-height:44px}
+@media(max-width:480px){
+  .four-dates{grid-template-columns:repeat(4,1fr);gap:5px}
+  .four-dates .quick-date-button{font-size:.8rem}
+  .receive-method-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .receive-method-grid .radio-card{align-items:center;min-height:66px;padding:8px}
+  .receive-method-grid .radio-card small{display:none}
+  .compact-time-field{grid-template-columns:84px 1fr}
+  .compact-date-mode{grid-template-columns:repeat(3,1fr)}
+  .compact-date-mode label{justify-content:center;padding-left:5px;font-size:.72rem}
+}

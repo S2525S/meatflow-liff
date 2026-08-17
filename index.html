@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#1e1e1e">
-  <title>MeatLink LINE発注</title>
-  <link rel="stylesheet" href="./styles.css?v=2.4.0">
+  <title>MeatFlow LINE発注</title>
+  <link rel="stylesheet" href="./styles.css?v=4.9.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="./config.js"></script>
 </head>
@@ -23,7 +23,7 @@
   </section>
 
   <section id="registrationView" class="center-card hidden">
-    <p class="eyebrow">🐂 MeatLink</p>
+    <p class="eyebrow">🐂 MeatFlow</p>
     <h1>店舗アカウント登録</h1>
     <p class="small-note">管理者から案内された情報を入力してください。</p>
     <form id="registrationForm">
@@ -36,7 +36,7 @@
   </section>
 
   <section id="pendingView" class="center-card hidden">
-    <p class="eyebrow">🐂 MeatLink</p>
+    <p class="eyebrow">🐂 MeatFlow</p>
     <h1>承認待ちです</h1>
     <p>管理者の承認後に発注できます。</p>
     <button id="pendingRetryButton" class="button button-primary">承認状況を再確認</button>
@@ -45,27 +45,20 @@
   <section id="mainView" class="hidden">
     <header class="app-header">
       <div class="brand-heading">
-        <p class="eyebrow">🐂 MeatLink</p>
-        <h1 id="screenTitle">
-          <span class="company-title">株式会社髙那（担たん亭）</span>
-          <span class="system-title">発注システム</span>
-        </h1>
+        <p class="eyebrow">🐂 MeatFlow</p>
+        <h1 id="screenTitle">発注する</h1>
       </div>
-      <div class="customer-box customer-profile">
-        <img id="profileImage" class="profile-image hidden" alt="LINEプロフィール画像">
-        <div class="customer-details">
-          <span class="customer-label">発注元</span>
-          <strong id="customerName">―</strong>
-          <small id="memberName"></small>
-        </div>
+      <div class="customer-box">
+        <span>発注元</span>
+        <strong id="customerName">―</strong>
+        <small id="memberName"></small>
       </div>
     </header>
 
-    <nav class="tab-bar four-tabs">
-      <button id="newOrderTab" class="tab-button active" type="button">発注</button>
-      <button id="aiOrderTab" class="tab-button" type="button">AI受注</button>
-      <button id="favoriteTab" class="tab-button" type="button">お気に入り</button>
-      <button id="historyTab" class="tab-button" type="button">履歴から発注</button>
+    <nav class="tab-bar three-tabs">
+      <button id="newOrderTab" class="tab-button active" type="button"><span>🛒</span>発注する</button>
+      <button id="favoriteTab" class="tab-button" type="button"><span>⭐</span>いつもの注文</button>
+      <button id="historyTab" class="tab-button" type="button"><span>📋</span>注文履歴</button>
     </nav>
 
     <section id="newOrderPanel">
@@ -74,36 +67,48 @@
         <button id="deleteDraftButton" type="button" class="link-button">下書きを削除</button>
       </div>
 
+      <div class="simple-guide">
+        <strong>商品 → 納品日 → 確認</strong>
+        <span>3ステップで発注できます。</span>
+      </div>
+
       <form id="orderForm" novalidate>
-        <section class="card">
-          <h2>1. ご希望日</h2>
-          <div class="date-mode">
-            <label><input type="radio" name="dateMode" value="date" checked> 日付を指定</label>
-            <label><input type="radio" name="dateMode" value="text"> 条件を入力</label>
-            <label><input type="radio" name="dateMode" value="both"> 両方入力</label>
+        <section class="card step-card">
+          <div class="section-heading">
+            <div><span class="step-number">1</span><h2>商品を選ぶ</h2></div>
+            <button id="addItemButton" type="button" class="button button-secondary button-compact">＋ 商品追加</button>
           </div>
+          <p class="small-note">商品名を入力すると候補を絞り込めます。単価は時価のため表示しません。</p>
+          <div id="itemsContainer"></div>
+          <button id="saveAsFavoriteButton" type="button" class="button button-secondary button-large">⭐ この内容を「いつもの注文」に保存</button>
+        </section>
+
+        <section class="card step-card">
+          <div class="step-title"><span class="step-number">2</span><h2>納品希望日</h2></div>
+          <div class="quick-date-grid">
+            <button class="quick-date-button" data-offset="0" type="button">今日</button>
+            <button class="quick-date-button" data-offset="1" type="button">明日</button>
+            <button class="quick-date-button" data-offset="2" type="button">明後日</button>
+          </div>
+
+          <div class="date-mode compact-date-mode">
+            <label><input type="radio" name="dateMode" value="date" checked> 日付で指定</label>
+            <label><input type="radio" name="dateMode" value="text"> その他の希望</label>
+            <label><input type="radio" name="dateMode" value="both"> 日付＋希望</label>
+          </div>
+
           <label id="deliveryDateField" class="field">
-            <span>希望日</span>
+            <span>📅 日付を選ぶ</span>
             <input id="deliveryDate" type="date">
           </label>
           <label id="deliveryConditionField" class="field hidden">
-            <span>希望条件</span>
-            <input id="deliveryCondition" type="text" placeholder="例：7月22日までに希望、最短希望">
+            <span>その他の希望</span>
+            <input id="deliveryCondition" type="text" placeholder="例：最短希望、○日までに希望">
           </label>
         </section>
 
-        <section class="card">
-          <div class="section-heading">
-            <h2>2. 商品</h2>
-            <button id="addItemButton" type="button" class="button button-secondary button-compact">＋追加</button>
-          </div>
-          <p class="small-note">この得意先に登録された商品を表示しています。単価は時価のため画面には表示しません。</p>
-          <div id="itemsContainer"></div>
-          <button id="saveAsFavoriteButton" type="button" class="button button-secondary button-large">現在の商品をお気に入りセットに保存</button>
-        </section>
-
-        <section class="card">
-          <h2>3. 受取方法</h2>
+        <section class="card optional-card">
+          <h2>受取方法・時間</h2>
           <div id="receiveMethodArea" class="radio-list"></div>
           <label class="field">
             <span>希望時間帯</span>
@@ -118,76 +123,34 @@
           </label>
         </section>
 
-        <section class="card">
-          <h2>4. 注文全体の備考</h2>
-          <textarea id="orderNote" rows="3" placeholder="配送や加工に関するご要望など"></textarea>
+        <section class="card optional-card">
+          <h2>備考 <span class="optional-label">任意</span></h2>
+          <textarea id="orderNote" rows="3" placeholder="加工・配送などのご要望がある場合のみ入力"></textarea>
         </section>
 
         <div class="draft-action-row">
           <button id="saveDraftButton" class="button button-secondary" type="button">下書き保存</button>
           <p id="draftSaveStatus" class="small-note" role="status" aria-live="polite"></p>
         </div>
+
         <div class="fixed-order-actions">
-          <button id="bottomAddItemButton" class="button button-secondary" type="button">＋追加</button>
-          <button class="button button-primary" type="submit">注文確認</button>
+          <button id="bottomAddItemButton" class="button button-secondary" type="button">＋ 商品追加</button>
+          <button class="button button-primary confirm-order-button" type="submit">注文内容を確認する</button>
         </div>
       </form>
     </section>
 
-
-    <section id="aiOrderPanel" class="hidden">
-      <section class="card">
-        <h2>AI受注</h2>
-        <div class="important-notice">
-          <strong>AI解析だけでは発注されません。</strong>
-          <span>解析後に通常の発注画面へ移動し、内容を必ず確認・修正してください。</span>
-        </div>
-
-        <div class="ai-mode-tabs">
-          <button id="aiTextModeButton" class="button button-primary" type="button">直接入力・貼り付け</button>
-          <button id="aiFaxModeButton" class="button button-secondary" type="button">FAX画像</button>
-        </div>
-
-        <div id="aiTextMode">
-          <label class="field">
-            <span>注文内容を入力または貼り付け</span>
-            <textarea id="aiOrderText" rows="9" placeholder="例：明日&#10;牛タン 2kg&#10;ハラミ 3kg&#10;午前中希望"></textarea>
-          </label>
-        </div>
-
-        <div id="aiFaxMode" class="hidden">
-          <label class="field">
-            <span>FAX画像を選択</span>
-            <input id="aiFaxFile" type="file" accept="image/jpeg,image/png,image/webp">
-          </label>
-          <img id="aiFaxPreview" class="fax-preview hidden" alt="選択したFAX画像">
-          <p class="small-note">JPEG・PNG・WebPに対応。大きな画像は端末側で縮小して送信します。</p>
-        </div>
-
-        <button id="analyzeAiOrderButton" class="button button-primary button-large" type="button">AIで解析する</button>
-        <p id="aiAnalyzeStatus" class="small-note"></p>
-      </section>
-
-      <section id="aiResultPanel" class="card hidden">
-        <h2>解析結果</h2>
-        <div id="aiWarnings" class="ai-warnings hidden"></div>
-        <div id="aiResultSummary"></div>
-        <button id="applyAiResultButton" class="button button-primary button-large" type="button">発注画面で確認・修正する</button>
-        <p class="small-note">このボタンでは発注されません。通常の発注画面に内容を移すだけです。</p>
-      </section>
-    </section>
-
     <section id="favoritePanel" class="hidden">
-      <section class="card">
+      <section class="card intro-card">
         <div class="section-heading">
-          <h2>お気に入りセット</h2>
-          <button id="newFavoriteButton" class="button button-primary button-compact" type="button">＋ 新しいセット</button>
+          <div><p class="eyebrow">⭐ いつもの注文</p><h2>よく使う注文を1タップで</h2></div>
+          <button id="newFavoriteButton" class="button button-primary button-compact" type="button">＋追加</button>
         </div>
-        <p class="small-note">得意先内の有効なスタッフ全員で共有されます。最大10セットまで登録できます。</p>
+        <p class="small-note">商品と数量をセットで保存できます。得意先内の有効なスタッフ全員で共有されます。</p>
       </section>
 
       <section id="favoriteEditor" class="card hidden">
-        <h2 id="favoriteEditorTitle">お気に入りセットを追加</h2>
+        <h2 id="favoriteEditorTitle">いつもの注文を追加</h2>
         <input id="favoriteEditingId" type="hidden">
         <label class="field">
           <span>セット名 <em>必須</em></span>
@@ -204,13 +167,13 @@
         </div>
         <p id="favoriteSaveStatus" class="small-note" role="status" aria-live="polite"></p>
       </section>
-
       <div id="favoriteList"></div>
     </section>
 
     <section id="historyPanel" class="hidden">
-      <section class="card">
-        <h2>注文履歴から発注</h2>
+      <section class="card intro-card">
+        <p class="eyebrow">📋 注文履歴</p>
+        <h2>以前の注文をもう一度</h2>
         <div class="history-filters">
           <input id="historyKeyword" type="search" placeholder="商品名・注文番号・担当者名で検索">
           <button id="historySearchButton" class="button button-secondary" type="button">検索</button>
@@ -224,7 +187,11 @@
   </section>
 
   <section id="confirmView" class="hidden">
-    <header class="app-header"><div><p class="eyebrow">🐂 MeatLink</p><h1>注文内容の確認</h1><p class="confirm-warning">内容を確認し、必要な場合は「内容を修正する」で戻ってください。</p></div></header>
+    <header class="confirm-header">
+      <p class="eyebrow">🐂 MeatFlow</p>
+      <h1>注文内容の確認</h1>
+      <p>間違いがなければ「この内容で発注する」を押してください。</p>
+    </header>
     <div id="confirmationContent"></div>
     <div class="sticky-actions two-buttons">
       <button id="editButton" class="button button-secondary button-large" type="button">内容を修正する</button>
@@ -232,10 +199,15 @@
     </div>
   </section>
 
-  <section id="completeView" class="center-card hidden">
-    <div class="success-mark">✓</div><h1>発注を受け付けました</h1>
+  <section id="completeView" class="center-card hidden complete-card">
+    <div class="success-mark">✓</div>
+    <h1>発注を受け付けました</h1>
     <p>注文番号</p><strong id="completedOrderId" class="order-id"></strong>
-    <button id="closeButton" class="button button-primary">閉じる</button>
+    <div class="complete-actions">
+      <button id="completeReorderButton" class="button button-secondary button-large" type="button">同じ内容でもう一度注文</button>
+      <button id="completeHistoryButton" class="button button-secondary button-large" type="button">注文履歴を見る</button>
+      <button id="closeButton" class="button button-primary button-large" type="button">閉じる</button>
+    </div>
   </section>
 </main>
 
@@ -245,15 +217,30 @@
       <strong class="item-number">商品 1</strong>
       <button type="button" class="remove-item-button">削除</button>
     </div>
+
+    <label class="field product-search-field">
+      <span>🔍 商品名を検索</span>
+      <input class="product-search-input" type="search" placeholder="例：牛タン、サーロイン">
+    </label>
+
     <label class="field"><span>商品 <em>必須</em></span>
       <select class="product-select" required><option value="">商品を選択してください</option></select>
     </label>
+
     <label class="field other-name-field hidden"><span>その他の商品名 <em>必須</em></span>
       <input class="other-name-input" type="text" placeholder="例：厚切り牛タン">
       <small>送信後、得意先別商品の「未確認」として登録されます。</small>
     </label>
-    <div class="field-grid">
-      <label class="field"><span>数量 <em>必須</em></span><input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+
+    <div class="quantity-unit-grid">
+      <div class="field">
+        <span>数量 <em>必須</em></span>
+        <div class="quantity-stepper">
+          <button class="quantity-minus" type="button" aria-label="数量を減らす">−</button>
+          <input class="quantity-input" type="number" min="0.01" step="0.01" inputmode="decimal" required>
+          <button class="quantity-plus" type="button" aria-label="数量を増やす">＋</button>
+        </div>
+      </div>
       <label class="field"><span>単位 <em>必須</em></span>
         <select class="unit-input" required>
           <option value="本" selected>本</option>
@@ -268,14 +255,11 @@
         </select>
       </label>
     </div>
-    <label class="field"><span>商品備考</span><input class="item-note-input" type="text" placeholder="厚切り、スライスなど"></label>
+    <label class="field item-note-field"><span>商品備考 <small>任意</small></span><input class="item-note-input" type="text" placeholder="厚切り、スライスなど"></label>
   </article>
 </template>
 
-<iframe id="submitFrame"
-        name="submitFrame"
-        class="hidden">
-</iframe>
-<script src="./app.js?v=2.4.0"></script>
+<iframe id="submitFrame" name="submitFrame" class="hidden"></iframe>
+<script src="./app.js?v=4.9.0"></script>
 </body>
 </html>

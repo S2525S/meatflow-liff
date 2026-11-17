@@ -10,33 +10,65 @@
     main { max-width: 38rem; margin: auto; padding: 24px; }
     h1 { font-size: 24px; }
   </style>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="./config.js"></script>
+  <link rel="preconnect" href="https://static.line-scdn.net">
+  <link rel="preconnect" href="https://api.line.me">
+  <link rel="preconnect" href="https://script.google.com">
+  <script id="line-sdk" src="https://static.line-scdn.net/liff/edge/2/sdk.js" async></script>
 </head>
 <body>
-  <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p></main>
+  <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p><button id="retry" type="button" hidden>再試行</button></main>
   <form id="open-certificates" method="post" action="https://script.google.com/macros/s/AKfycbyu9RR92aTrnCn0aqRIZ3GuyWGnFReG42AzCoR21BdrlluzyES50Zz9VYmF_7xXI2CW/exec">
     <input type="hidden" name="action" value="openCertificatesFromLine">
     <input type="hidden" name="idToken">
   </form>
   <script>
-    (async () => {
-      const status = document.getElementById('status');
+    const status = document.getElementById('status');
+    const retry = document.getElementById('retry');
+    retry.onclick = () => location.reload();
+    let stage = 'line';
+    let deadline = setTimeout(slow, 8000);
+    let expired = false;
+
+    function slow() {
+      expired = true;
+      status.textContent = stage === 'line'
+        ? 'LINEの確認に時間がかかっています。'
+        : '証明書サーバーの応答に時間がかかっています。';
+      retry.hidden = false;
+    }
+
+    async function openCertificates() {
       try {
-        await liff.init({ liffId: MEATFLOW_CONFIG.LIFF_ID, withLoginOnExternalBrowser: false });
+        const sdk = document.getElementById('line-sdk');
+        if (!window.liff) {
+          await new Promise((resolve, reject) => {
+            sdk.addEventListener('load', resolve, {once: true});
+            sdk.addEventListener('error', reject, {once: true});
+          });
+        }
+        await liff.init({ liffId: '2010748894-FyJqsDsC', withLoginOnExternalBrowser: false });
+        if (expired) return;
+        clearTimeout(deadline);
         if (!liff.isInClient() || !liff.isLoggedIn()) {
           status.textContent = 'MeatFlow受注通知のリッチメニューから開いてください。';
           return;
         }
         const token = liff.getIDToken();
         if (!token) throw new Error('LINE token unavailable');
+        stage = 'server';
+        status.textContent = '証明書一覧に接続しています。';
+        deadline = setTimeout(slow, 12000);
         const form = document.getElementById('open-certificates');
         form.elements.namedItem('idToken').value = token;
         form.submit();
       } catch (error) {
-        status.textContent = 'LINEで確認できませんでした。MeatFlow受注通知のリッチメニューから開き直してください。';
+        clearTimeout(deadline);
+        if (expired) return;
+        status.textContent = 'LINEで確認できませんでした。もう一度お試しください。';
+        retry.hidden = false;
       }
-    })();
+    }
+    openCertificates();
   </script>
 </body>
 </html>

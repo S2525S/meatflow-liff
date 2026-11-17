@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>石垣牛証明書</title>
+  <style>
+    body { margin: 0; background: #eef3ef; color: #182b22; font: 16px system-ui, sans-serif; }
+    main { max-width: 38rem; margin: auto; padding: 24px; }
+    h1 { font-size: 24px; }
+  </style>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="./config.js"></script>
+</head>
+<body>
+  <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p></main>
+  <form id="open-certificates" method="post" action="https://script.google.com/macros/s/AKfycbyu9RR92aTrnCn0aqRIZ3GuyWGnFReG42AzCoR21BdrlluzyES50Zz9VYmF_7xXI2CW/exec">
+    <input type="hidden" name="action" value="openCertificatesFromLine">
+    <input type="hidden" name="idToken">
+  </form>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      try {
+        await liff.init({ liffId: MEATFLOW_CONFIG.LIFF_ID, withLoginOnExternalBrowser: false });
+        if (!liff.isInClient() || !liff.isLoggedIn()) {
+          status.textContent = 'MeatFlow受注通知のリッチメニューから開いてください。';
+          return;
+        }
+        const token = liff.getIDToken();
+        if (!token) throw new Error('LINE token unavailable');
+        const form = document.getElementById('open-certificates');
+        form.elements.namedItem('idToken').value = token;
+        form.submit();
+      } catch (error) {
+        status.textContent = 'LINEで確認できませんでした。MeatFlow受注通知のリッチメニューから開き直してください。';
+      }
+    })();
+  </script>
+</body>
+</html>

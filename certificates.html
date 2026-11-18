@@ -23,8 +23,12 @@
     <input type="hidden" name="view">
   </form>
   <script>
+    const views = {orders:'受注管理',forecast:'注文予測',print:'受注PDF',cut:'カット予定'};
+    const view = new URLSearchParams(location.search).get('view');
+    const executive = Object.prototype.hasOwnProperty.call(views,view);
     const quantity = new URLSearchParams(location.search).get('view') === 'quantity';
     const heading = document.querySelector('h1');
+    if(executive) document.title = heading.textContent = views[view];
     if(quantity) document.title = heading.textContent = '量目表PDF';
     const status = document.getElementById('status');
     const retry = document.getElementById('retry');
@@ -60,10 +64,11 @@
         const token = liff.getIDToken();
         if (!token) throw new Error('LINE token unavailable');
         stage = 'server';
-        status.textContent = '証明書一覧に接続しています。';
+        status.textContent = executive ? views[view]+'を開いています。' : '証明書一覧に接続しています。';
         deadline = setTimeout(slow, 12000);
         const form = document.getElementById('open-certificates');
         form.elements.namedItem('idToken').value = token;
+        if(executive){ form.elements.namedItem('action').value='openExecutiveFromLine'; form.elements.namedItem('view').value=view; }
         if(quantity) form.elements.namedItem('view').value = 'quantity';
         form.submit();
       } catch (error) {

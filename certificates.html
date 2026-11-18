@@ -14,6 +14,10 @@
     .executive main::before { content:'MeatFlow'; color:#486252; font-weight:700; letter-spacing:.08em; }
     .executive h1 { margin:12px 0; font-size:28px; }
     .executive button { width:100%; padding:14px; border:0; border-radius:12px; background:#214e3c; color:white; font:700 16px system-ui,sans-serif; cursor:pointer; }
+    #workbar { position:fixed; inset:0 0 auto; height:36px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:#f6f4ee; font-weight:600; }
+    #workbar[hidden], #workframe[hidden] { display:none; }
+    #workbar button { width:auto; padding:5px 12px; font-size:13px; }
+    #workframe { position:fixed; inset:36px 0 0; width:100%; height:calc(100% - 36px); border:0; background:white; }
   </style>
   <link rel="preconnect" href="https://static.line-scdn.net">
   <link rel="preconnect" href="https://api.line.me">
@@ -22,6 +26,7 @@
 </head>
 <body>
   <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p><button id="retry" type="button" hidden>再試行</button></main>
+  <nav id="workbar" hidden><span id="worktitle"></span><button id="direct" type="button">直接開く</button></nav>
   <form id="open-certificates" method="post" action="https://script.google.com/macros/s/AKfycbyu9RR92aTrnCn0aqRIZ3GuyWGnFReG42AzCoR21BdrlluzyES50Zz9VYmF_7xXI2CW/exec">
     <input type="hidden" name="action" value="openCertificatesFromLine">
     <input type="hidden" name="idToken">
@@ -80,7 +85,33 @@
         form.elements.namedItem('idToken').value = token;
         if(executive){ form.elements.namedItem('action').value='openExecutiveFromLine'; form.elements.namedItem('view').value=view; }
         if(quantity) form.elements.namedItem('view').value = 'quantity';
-        form.target = "_self";
+        if (executive) {
+          const frame = document.createElement('iframe');
+          frame.id = 'workframe';
+          frame.name = 'meatflow-work';
+          frame.title = views[view];
+          frame.allow = 'web-share; clipboard-write';
+          frame.hidden = true;
+          document.body.appendChild(frame);
+          document.getElementById('worktitle').textContent = views[view];
+          document.getElementById('workbar').hidden = false;
+          document.getElementById('direct').onclick = () => {
+            const freshToken = liff.getIDToken();
+            if (!freshToken) { location.reload(); return; }
+            form.elements.namedItem('idToken').value = freshToken;
+            form.target = '_self';
+            form.submit();
+          };
+          frame.addEventListener('load', () => {
+            try { if (frame.contentWindow.location.href === 'about:blank') return; } catch (_) { /* Cross-origin app loaded. */ }
+            clearTimeout(deadline);
+            frame.hidden = false;
+            document.querySelector('main').hidden = true;
+          });
+          form.target = frame.name;
+        } else {
+          form.target = '_self';
+        }
         form.submit();
       } catch (error) {
         clearTimeout(deadline);

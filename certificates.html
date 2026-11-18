@@ -86,15 +86,15 @@
         form.elements.namedItem('idToken').value = token;
         if(executive){ form.elements.namedItem('action').value='openExecutiveFromLine'; form.elements.namedItem('view').value=view; }
         if(quantity) form.elements.namedItem('view').value = 'quantity';
-        if (executive) {
+        {
           const frame = document.createElement('iframe');
           frame.id = 'workframe';
           frame.name = 'meatflow-work';
-          frame.title = views[view];
+          frame.title = heading.textContent;
           frame.allow = 'web-share; clipboard-write';
           frame.style.pointerEvents = "none";
           document.body.appendChild(frame);
-          document.getElementById('worktitle').textContent = views[view];
+          document.getElementById('worktitle').textContent = heading.textContent;
           document.getElementById('workbar').hidden = false;
           document.getElementById('direct').onclick = () => {
             const freshToken = liff.getIDToken();
@@ -110,8 +110,6 @@
             document.querySelector('main').hidden = true;
           });
           form.target = frame.name;
-        } else {
-          form.target = '_self';
         }
         form.submit();
       } catch (error) {

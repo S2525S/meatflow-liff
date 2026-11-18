@@ -9,6 +9,11 @@
     body { margin: 0; background: #eef3ef; color: #182b22; font: 16px system-ui, sans-serif; }
     main { max-width: 38rem; margin: auto; padding: 24px; }
     h1 { font-size: 24px; }
+    body.executive { background:#f6f4ee; min-height:100svh; display:grid; place-items:center; }
+    .executive main { box-sizing:border-box; width:min(90vw,22rem); padding:28px; background:#fffefa; border:1px solid #dddcd1; border-radius:20px; box-shadow:0 8px 32px #20382c0c; }
+    .executive main::before { content:'MeatFlow'; color:#486252; font-weight:700; letter-spacing:.08em; }
+    .executive h1 { margin:12px 0; font-size:28px; }
+    .executive button { width:100%; padding:14px; border:0; border-radius:12px; background:#214e3c; color:white; font:700 16px system-ui,sans-serif; cursor:pointer; }
   </style>
   <link rel="preconnect" href="https://static.line-scdn.net">
   <link rel="preconnect" href="https://api.line.me">
@@ -16,7 +21,7 @@
   <script id="line-sdk" src="https://static.line-scdn.net/liff/edge/2/sdk.js" async></script>
 </head>
 <body>
-  <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p><button id="retry" type="button" hidden>再試行</button></main>
+  <main><h1>石垣牛証明書</h1><p id="status" role="status">LINEで閲覧資格を確認しています。</p><button type="submit" form="open-certificates" id="launch" hidden></button><button id="retry" type="button" hidden>再試行</button></main>
   <form id="open-certificates" method="post" action="https://script.google.com/macros/s/AKfycbyu9RR92aTrnCn0aqRIZ3GuyWGnFReG42AzCoR21BdrlluzyES50Zz9VYmF_7xXI2CW/exec">
     <input type="hidden" name="action" value="openCertificatesFromLine">
     <input type="hidden" name="idToken">
@@ -32,6 +37,10 @@
     if(quantity) document.title = heading.textContent = '量目表PDF';
     const status = document.getElementById('status');
     const retry = document.getElementById('retry');
+    if (executive) {
+      document.body.classList.add('executive');
+      status.textContent = 'LINEで本人確認中…';
+    }
     retry.onclick = () => location.reload();
     let stage = 'line';
     let deadline = setTimeout(slow, 8000);
@@ -70,6 +79,27 @@
         form.elements.namedItem('idToken').value = token;
         if(executive){ form.elements.namedItem('action').value='openExecutiveFromLine'; form.elements.namedItem('view').value=view; }
         if(quantity) form.elements.namedItem('view').value = 'quantity';
+        if (executive) {
+          clearTimeout(deadline);
+          form.target = '_blank';
+          form.rel = 'noopener noreferrer';
+          const launch = document.getElementById('launch');
+          launch.textContent = views[view] + 'を開く ↗';
+          launch.hidden = false;
+          status.textContent = '別ウィンドウで開きます。';
+          form.addEventListener('submit', event => {
+            const current = liff.getIDToken();
+            if (!current) {
+              event.preventDefault();
+              launch.hidden = true;
+              retry.hidden = false;
+              status.textContent = 'LINEの本人確認をやり直してください。';
+              return;
+            }
+            form.elements.namedItem('idToken').value = current;
+          });
+          return;
+        }
         form.submit();
       } catch (error) {
         clearTimeout(deadline);
